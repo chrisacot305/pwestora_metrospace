@@ -1,0 +1,606 @@
+================================================================================
+                    PWESTORA: TECHNICAL PAPER & SYSTEM FLOW
+         Commercial Property Leasing and Tenant Management Platform
+================================================================================
+
+Document Version: 1.0.0
+Author/System: Pwestora Engineering Team
+Platform: Mobile Application (Cross-Platform Flutter / Dart)
+Target Environments: Android, iOS, Web, Desktop
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY & INTRODUCTION
+2. PROBLEM STATEMENT & OBJECTIVES
+3. SYSTEM ARCHITECTURE & TECH STACK
+4. USER PERSONAS & DUAL-MODE OPERATING MODEL
+5. COMPREHENSIVE APPLICATION FLOW (END-TO-END USER JOURNEYS)
+   5.1 Authentication & Session Management Flow
+   5.2 Property Discovery & Browse Flow
+   5.3 Lease Application Lifecycle Flow
+   5.4 Active Tenant Dashboard & Interactive Calendar Flow
+   5.5 Maintenance Ticketing & Issue Resolution Flow (8 Stages)
+   5.6 Profile, Account & Navigation Shell Flow
+6. COMPLETE ASCII FLOWCHARTS & DATA FLOW DIAGRAMS
+7. DETAILED SCREEN-BY-SCREEN FUNCTIONAL SPECIFICATION
+8. REST API CONTRACT & DATA SPECIFICATIONS
+9. DESIGN SYSTEM & UI/UX DESIGN TOKENS
+10. SECURITY, RESILIENCY & BEST PRACTICES
+11. FUTURE ROADMAP & EXTENSIBILITY
+12. CONCLUSION
+
+================================================================================
+1. EXECUTIVE SUMMARY & INTRODUCTION
+================================================================================
+Pwestora is an all-in-one mobile platform designed to bridge the gap between
+commercial property developers/lessors and business tenants. Whether a user is
+searching for available retail stalls, commercial spaces, or office units, or is
+an existing tenant managing active lease obligations and facility maintenance,
+Pwestora provides a streamlined, user-friendly digital experience.
+
+Key Highlights:
+- Dynamic Dual-Mode Architecture: Automatically adapts navigation and features
+  based on whether the authenticated user has an active commercial lease.
+- 8-Stage Maintenance Workflow: Real-time issue reporting and resolution tracking
+  with assigned contractor support and status visibility.
+- Interactive Weekly Lease Calendar: Day-by-day visualization of rent deadlines,
+  scheduled maintenance appointments, and building announcements.
+- Transparent Rental Application Engine: End-to-end lease application submission
+  and status tracking with instant feedback.
+
+================================================================================
+2. PROBLEM STATEMENT & OBJECTIVES
+================================================================================
+Traditional commercial space leasing and tenant management often suffer from:
+1. Fragmented Communication: Tenants communicate through scattered channels
+   (SMS, email, phone calls, paper slips) for lease dues and maintenance issues.
+2. Opaque Maintenance Tracking: Reported facility problems lack clear stages,
+   leaving tenants uncertain if a contractor has been assigned or scheduled.
+3. Inefficient Space Discovery: Prospective business owners struggle to filter
+   spaces by precise floor levels, square footage, and budget criteria.
+4. Cumbersome Paper Applications: Rental proposals and business permits are
+   frequently lost or delayed in physical filing systems.
+
+Objectives of Pwestora:
+- Provide a unified digital portal for both prospective applicants and active tenants.
+- Enable transparent, real-time maintenance reporting with stage progression.
+- Give tenants total visibility over their monthly lease terms, deadlines, and notices.
+- Accelerate the commercial leasing cycle through direct in-app applications.
+
+================================================================================
+3. SYSTEM ARCHITECTURE & TECH STACK
+================================================================================
+Pwestora is built using a modern, multi-tiered client-server architecture:
+
+1. CLIENT LAYER (Frontend):
+   - Framework: Flutter SDK (Dart 3.x)
+   - Design System: Material Design 3 with custom brand styling (Navy & Soft Blues)
+   - State & Lifecycle Management: StatefulWidgets, FutureBuilder async streaming,
+     and cached local state with pull-to-refresh synchronization.
+   - Local Persistence: SharedPreferences for JWT authentication tokens,
+     cached user credentials, and recently viewed property history.
+
+2. COMMUNICATION LAYER (Networking):
+   - Protocol: HTTPS / RESTful JSON APIs
+   - Base URL: https://pwestora.com/api
+   - Auth Mechanism: Bearer Token HTTP Authorization Headers
+
+3. APPLICATION STRUCTURE (Directory Map):
+   lib/
+   ├── main.dart                   # Bootstrap entry point & AuthGate
+   ├── theme.dart                  # Color tokens, decorations, & typography
+   ├── services/
+   │   └── api_service.dart        # Centralized HTTP client & Session Manager
+   └── screens/
+       ├── home_shell.dart         # Adaptive bottom navigation container
+       ├── login_screen.dart       # Email/password authentication
+       ├── register_screen.dart    # New user onboarding & account creation
+       ├── dashboard_screen.dart   # Active tenant hero & weekly calendar
+       ├── browse_screen.dart      # Property catalog, search & filtering
+       ├── property_detail_screen.dart # Detailed unit view & application CTA
+       ├── apply_screen.dart       # Rental proposal submission form
+       ├── my_applications_screen.dart # Application tracking & status list
+       ├── tickets_list_screen.dart# Maintenance hub with metrics & filtering
+       ├── ticket_create_screen.dart# Maintenance report submission form
+       ├── ticket_detail_screen.dart# 8-stage progress tracker & notes
+       ├── messages_screen.dart    # Tenant communication center
+       ├── profile_screen.dart     # User profile, preferences & session logout
+       └── coming_soon_screen.dart # Placeholder for future feature rollouts
+
+================================================================================
+4. USER PERSONAS & DUAL-MODE OPERATING MODEL
+================================================================================
+Pwestora automatically inspects the user's active lease record via the
+`lease_status.php` endpoint. Depending on the response, the app operates in one
+of two distinct modes:
+
+--------------------------------------------------------------------------------
+MODE A: PROSPECTIVE APPLICANT / SPACE SEEKER (lease == null)
+--------------------------------------------------------------------------------
+Goal: Discover commercial properties, review stall specs, and submit applications.
+Navigation Tabs:
+1. Browse: Explore available retail/office units with search and multi-filters.
+2. Applications: Review pending, approved, or rejected lease applications.
+3. Account: Manage personal profile, security, and account settings.
+
+--------------------------------------------------------------------------------
+MODE B: ACTIVE COMMERCIAL TENANT (lease != null)
+--------------------------------------------------------------------------------
+Goal: Manage daily lease obligations, rent payments, and facility maintenance.
+Navigation Tabs:
+1. Dashboard: Active lease card, monthly rent status, and weekly schedule.
+2. Browse: Search for additional or adjacent commercial expansion spaces.
+3. Messages: Direct communication with building management and lessors.
+4. Account: Manage profile, payment methods, notifications, and app preferences.
+
+================================================================================
+5. COMPREHENSIVE APPLICATION FLOW (END-TO-END USER JOURNEYS)
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 AUTHENTICATION & SESSION MANAGEMENT FLOW
+--------------------------------------------------------------------------------
+Step 1: App Launch (`main.dart` -> `AuthGate`)
+   - `AuthGate` initiates `ApiService.getToken()` from `SharedPreferences`.
+   - If token is missing/empty: Navigates to `LoginScreen`.
+   - If valid token exists: Navigates directly into `HomeShell`.
+
+Step 2: Registration (`RegisterScreen`)
+   - New user enters Full Name, Email Address, Contact Phone, and Password.
+   - Input is validated (non-empty fields, valid email structure, min password length).
+   - Calls `POST /auth_register.php`.
+   - On success: Saves auth token and user profile locally; opens `HomeShell`.
+
+Step 3: Login (`LoginScreen`)
+   - Returning user inputs Email and Password.
+   - Calls `POST /auth_login.php`.
+   - On success: Saves session token in persistent storage; routes to `HomeShell`.
+
+Step 4: Logout (`ProfileScreen`)
+   - User clicks "Sign Out".
+   - `ApiService.clearSession()` removes token and user metadata.
+   - App navigates back to `LoginScreen` and clears navigation history.
+
+--------------------------------------------------------------------------------
+5.2 PROPERTY DISCOVERY & BROWSE FLOW
+--------------------------------------------------------------------------------
+Step 1: Browse Catalog (`BrowseScreen`)
+   - Fetches live commercial listings via `GET /properties_list.php`.
+   - Displays featured highlights, recently viewed history, and grid listings.
+
+Step 2: Searching & Multi-Filter Refinements
+   - Keyword Search: Filters by property title, building name, or address.
+   - Category Filter: Food & Beverage, Retail Stall, Office Suite, Storage, etc.
+   - Floor Level Filter: Ground Floor, 2nd Floor, 3rd Floor, etc.
+   - Price Range: Custom slider or quick filters for monthly rent budget.
+
+Step 3: Property Inspection (`PropertyDetailScreen`)
+   - User taps a listing card to view photos, dimensions (sqm), price, and amenities.
+   - Automatically records the listing into the on-device "Recently Viewed" cache
+     via `ApiService.addRecentlyViewed()`.
+   - Displays "Apply for Lease" action button.
+
+--------------------------------------------------------------------------------
+5.3 LEASE APPLICATION LIFECYCLE FLOW
+--------------------------------------------------------------------------------
+Step 1: Application Form (`ApplyScreen`)
+   - Pre-fills property ID, property title, and standard monthly rent.
+   - User inputs:
+     * Registered Business / Trade Name
+     * Proposed Lease Term (e.g., 6, 12, 24, 36 Months)
+     * Target Move-in / Inception Date
+     * Special Requests or Fit-out Requirements
+   - Submits payload via `POST /applications_create.php`.
+
+Step 2: Application Tracking (`MyApplicationsScreen`)
+   - Displays list of submitted applications retrieved via `GET /applications_mine.php`.
+   - Status Badges:
+     * PENDING: Under management review.
+     * APPROVED: Application accepted; lease preparation underway.
+     * REJECTED: Application declined with notes.
+   - Once approved and converted to an active lease, triggers `_recheckLease()`
+     in `HomeShell` to dynamically unlock the Tenant Dashboard.
+
+--------------------------------------------------------------------------------
+5.4 ACTIVE TENANT DASHBOARD & INTERACTIVE CALENDAR FLOW
+--------------------------------------------------------------------------------
+Step 1: Dashboard Loading (`DashboardScreen`)
+   - Receives active lease record (Property Name, Location, Monthly Rent, Lessor).
+   - Fetches active maintenance tickets via `GET /tickets_list.php`.
+
+Step 2: Hero Header Display
+   - Displays prominent status pill ("ACTIVE LEASE" / "Good Standing").
+   - Highlights Monthly Rent amount in Philippine Peso (₱) and Lessor contact.
+
+Step 3: 7-Day Interactive Week Calendar
+   - Dynamic 7-day capsule row (Monday through Sunday) with event indicators.
+   - Daily event engine automatically aggregates:
+     * Monday: Monthly Lease Rent Due deadline.
+     * Ticket Days: Scheduled maintenance visits with assigned contractors.
+     * Friday: Building notices & generator tests.
+     * Clear Days: "Good Standing / All Clear" status badge.
+   - Tapping any calendar day filters the schedule card below.
+
+Step 4: Metric Summary Cards
+   - "Open Tickets": Live counter of unresolved maintenance reports.
+   - "Lease Term": Remaining term duration in months.
+
+--------------------------------------------------------------------------------
+5.5 MAINTENANCE TICKETING & ISSUE RESOLUTION FLOW (8 STAGES)
+--------------------------------------------------------------------------------
+Pwestora implements a formal 8-Stage Maintenance Lifecycle:
+
+  Stage 0: Submitted            (Tenant submitted issue report)
+  Stage 1: Under Review         (Property management inspecting report)
+  Stage 2: Approved             (Budget and repair request approved)
+  Stage 3: Contractor Assigned  (Specialist/technician allocated)
+  Stage 4: Scheduled            (Date and time window booked)
+  Stage 5: In Progress          (Physical repair work underway)
+  Stage 6: Inspection           (Quality check by building admin)
+  Stage 7: Completed            (Issue fully resolved and signed off)
+
+Flow Details:
+1. Create Ticket (`TicketCreateScreen`):
+   - Category Selection: Plumbing, Electrical, Structural, Internet, HVAC,
+     Cleaning, Security, Lighting.
+   - Priority Rating: Low, Medium, High, Urgent.
+   - Title & Detailed Description of the defect.
+   - Calls `POST /tickets_create.php`.
+
+2. Ticket Hub & Analytics (`TicketsListScreen`):
+   - Circular Resolution Score (% of tickets completed).
+   - Summary Metric cards: Total Reports, In Progress, Resolved.
+   - Tab Filters: All, Active, Resolved.
+
+3. Detailed Tracking (`TicketDetailScreen`):
+   - Visual 8-Stage step indicator showing exact progress.
+   - Displays assigned contractor name and scheduled time window.
+   - Activity log and landlord update notes.
+
+--------------------------------------------------------------------------------
+5.6 PROFILE, ACCOUNT & NAVIGATION SHELL FLOW
+--------------------------------------------------------------------------------
+- Profile Screen (`ProfileScreen`):
+  * Displays user name, email address, and role badge.
+  * Preferences: Push Notifications toggle, Security settings, Help/Support FAQ.
+  * Logout action to terminate session.
+
+- Messages Screen (`MessagesScreen`):
+  * Direct communication thread between tenant and building administration.
+
+================================================================================
+6. COMPLETE ASCII FLOWCHARTS & DATA FLOW DIAGRAMS
+================================================================================
+
+--------------------------------------------------------------------------------
+DIAGRAM 1: APP INITIALIZATION & DYNAMIC NAVIGATION FLOW
+--------------------------------------------------------------------------------
+
+                +---------------------------------+
+                |        User Launches App        |
+                +---------------------------------+
+                                 |
+                                 v
+                +---------------------------------+
+                |      AuthGate: Check Token      |
+                |   (ApiService.getToken())       |
+                +---------------------------------+
+                                 |
+                +----------------+----------------+
+                |                                 |
+        [Token == null]                   [Token != null]
+                |                                 |
+                v                                 v
+     +--------------------+            +--------------------+
+     |    LoginScreen     |            |  Fetch Lease Info  |
+     |  (or RegisterTab)  |            | (lease_status.php) |
+     +--------------------+            +--------------------+
+                |                                 |
+                | (Successful Auth)       +-------+-------+
+                |                         |               |
+                +-----------------> [lease != null]  [lease == null]
+                                          |               |
+                                          v               v
+                                  +---------------+---------------+
+                                  |  TENANT MODE  | PROSPECT MODE |
+                                  +---------------+---------------+
+                                  | 1. Dashboard  | 1. Browse     |
+                                  | 2. Browse     | 2. Apply List |
+                                  | 3. Messages   | 3. Account    |
+                                  | 4. Account    |               |
+                                  +---------------+---------------+
+
+
+--------------------------------------------------------------------------------
+DIAGRAM 2: LEASE APPLICATION & CONVERSION LIFECYCLE
+--------------------------------------------------------------------------------
+
+ [Browse Catalog] ---> [View Unit Detail] ---> [ApplyScreen Form]
+                                                       |
+                                                       v
+                                            [POST /applications_create.php]
+                                                       |
+                                                       v
+                                            [Status: PENDING]
+                                                       |
+                                 +---------------------+---------------------+
+                                 |                                           |
+                                 v                                           v
+                       [Status: REJECTED]                           [Status: APPROVED]
+                               |                                             |
+                         (View Reason)                                       v
+                                                                    [Lease Contract Created]
+                                                                             |
+                                                                             v
+                                                                 [Dashboard Mode Unlocked]
+
+
+--------------------------------------------------------------------------------
+DIAGRAM 3: 8-STAGE MAINTENANCE RESOLUTION FLOW
+--------------------------------------------------------------------------------
+
+   +-----------------------------------------------------------------------+
+   |                        TENANT SUBMITS TICKET                          |
+   |              (Category, Priority, Description, Photos)                |
+   +-----------------------------------------------------------------------+
+                                      |
+                                      v
+   [Stage 0: SUBMITTED] -----------------------------> Ticket logged in system
+                                      |
+                                      v
+   [Stage 1: UNDER REVIEW] --------------------------> Admin reviews problem
+                                      |
+                                      v
+   [Stage 2: APPROVED] ------------------------------> Repair work authorized
+                                      |
+                                      v
+   [Stage 3: CONTRACTOR ASSIGNED] -------------------> Electrician / Plumber assigned
+                                      |
+                                      v
+   [Stage 4: SCHEDULED] -----------------------------> Visit time set on calendar
+                                      |
+                                      v
+   [Stage 5: IN PROGRESS] ---------------------------> Technician performing repair
+                                      |
+                                      v
+   [Stage 6: INSPECTION] ----------------------------> Quality & safety check
+                                      |
+                                      v
+   [Stage 7: COMPLETED] -----------------------------> Resolution Score updated
+
+================================================================================
+7. DETAILED SCREEN-BY-SCREEN FUNCTIONAL SPECIFICATION
+================================================================================
+
+1. `main.dart`
+   - Role: Application Root.
+   - Key Class: `AuthGate` (StatefulWidget).
+   - Behavior: Reads `api_token` from SharedPreferences; routes to either
+     `LoginScreen` or `HomeShell`.
+
+2. `theme.dart`
+   - Role: Unified Design Tokens and Material 3 Theme Definition.
+   - Colors:
+     * Primary: `#102340` (Deep Navy)
+     * Primary Light: `#264875`
+     * Accent: `#678EBC` (Slate Sky Blue)
+     * Accent Soft: `#E7EEF6`
+     * Background: `#F6F8FB`
+     * Statuses: Success (`#1E8E5A`), Warning (`#E8A33D`), Error (`#D64545`).
+   - Custom Helpers: `AppDecorations.card()`, `AppDecorations.squircle()`.
+
+3. `api_service.dart`
+   - Role: Centralized API Network Client & Session Store.
+   - Methods:
+     * Auth: `register()`, `login()`, `saveSession()`, `getToken()`, `clearSession()`
+     * Properties: `fetchProperties()`, `fetchPropertyDetail()`, `addRecentlyViewed()`
+     * Applications: `submitApplication()`, `fetchMyApplications()`
+     * Tenant Lease: `fetchLeaseStatus()`
+     * Maintenance: `fetchTickets()`, `createTicket()`
+
+4. `home_shell.dart`
+   - Role: Adaptive Root Navigation Bar.
+   - Behavior: Uses `IndexedStack` to maintain state across tabs and rebuilds
+     seamlessly when lease status shifts (`_recheckLease()`).
+
+5. `dashboard_screen.dart`
+   - Role: Tenant Command Center.
+   - Features:
+     * Full-width dark navy hero header with active lease metadata and monthly rent.
+     * Dynamic weekly calendar slider with daily event tagging.
+     * Quick metric boxes for open tickets and lease duration.
+
+6. `browse_screen.dart`
+   - Role: Commercial Property Explorer.
+   - Features: Search field, horizontal category chips, floor filter, price sorting,
+     recently viewed carousel, and property card list.
+
+7. `property_detail_screen.dart`
+   - Role: Single Property Inspection.
+   - Features: High-res property photo, specifications (area, floor, rent), amenities
+     chips, lessor details, and direct "Apply Now" button.
+
+8. `apply_screen.dart`
+   - Role: Lease Application Submission.
+   - Fields: Business name, lease duration dropdown, monthly rent preview, terms checkbox.
+
+9. `my_applications_screen.dart`
+   - Role: Prospect Application Tracker.
+   - Features: List of submitted proposals with status chips (Pending, Approved, Rejected).
+
+10. `tickets_list_screen.dart`
+    - Role: Facility Maintenance Hub.
+    - Features: Circular resolution gauge, summary metric counters, segment filters
+      (All, Active, Resolved), and "New Report" floating action button.
+
+11. `ticket_create_screen.dart`
+    - Role: Defect Reporting Form.
+    - Features: Category grid selector with icons, priority selector, title and note fields.
+
+12. `ticket_detail_screen.dart`
+    - Role: 8-Stage Progress Tracker.
+    - Features: Visual timeline, assigned contractor card, and status history.
+
+13. `profile_screen.dart`
+    - Role: User Settings & Account Management.
+    - Features: User card, notification preferences, dark mode toggle, support link, logout.
+
+================================================================================
+8. REST API CONTRACT & DATA SPECIFICATIONS
+================================================================================
+
+All endpoints communicate via JSON over HTTPS.
+Base URL: https://pwestora.com/api
+
+1. POST /auth_register.php
+   Request Payload:
+   {
+     "full_name": "Juan Dela Cruz",
+     "email": "juan@example.com",
+     "phone": "+639171234567",
+     "password": "SecurePassword123"
+   }
+   Response Payload:
+   {
+     "ok": true,
+     "token": "jwt_token_string_xyz",
+     "user": {
+       "id": 101,
+       "full_name": "Juan Dela Cruz",
+       "email": "juan@example.com"
+     }
+   }
+
+2. POST /auth_login.php
+   Request Payload:
+   {
+     "email": "juan@example.com",
+     "password": "SecurePassword123"
+   }
+   Response Payload:
+   {
+     "ok": true,
+     "token": "jwt_token_string_xyz",
+     "user": {
+       "id": 101,
+       "full_name": "Juan Dela Cruz",
+       "email": "juan@example.com"
+     }
+   }
+
+3. GET /properties_list.php
+   Headers: None required (Public)
+   Response Payload:
+   {
+     "ok": true,
+     "properties": [
+       {
+         "id": 1,
+         "title": "Stall A-12 Ground Floor",
+         "category": "Retail",
+         "floor": "Ground Floor",
+         "area_sqm": 24.5,
+         "rent": 18500.00,
+         "status": "Available",
+         "image_url": "https://pwestora.com/uploads/stall_a12.jpg"
+       }
+     ]
+   }
+
+4. GET /lease_status.php
+   Headers: Authorization: Bearer <token>
+   Response Payload (When Tenant has Active Lease):
+   {
+     "ok": true,
+     "has_lease": true,
+     "lease": {
+       "id": 501,
+       "property_name": "Stall A-12 Ground Floor",
+       "property_address": "Commercial Hub, Main Wing, Manila",
+       "rent": 18500.00,
+       "term_months": 12,
+       "lessor_name": "Pwestora Realty Corp",
+       "open_tickets": 1
+     }
+   }
+
+5. POST /tickets_create.php
+   Headers: Authorization: Bearer <token>
+   Request Payload:
+   {
+     "category": "plumbing",
+     "priority": "high",
+     "title": "Sink drain leaking in main kitchen stall"
+   }
+   Response Payload:
+   {
+     "ok": true,
+     "ticket_id": 842
+   }
+
+6. GET /tickets_list.php
+   Headers: Authorization: Bearer <token>
+   Response Payload:
+   {
+     "ok": true,
+     "tickets": [
+       {
+         "id": 842,
+         "title": "Sink drain leaking in main kitchen stall",
+         "category": "plumbing",
+         "priority": "high",
+         "stage": 3,
+         "contractor": "Apex Plumbing Services",
+         "created_at": "2026-09-07 09:30:00"
+       }
+     ]
+   }
+
+================================================================================
+9. DESIGN SYSTEM & UI/UX DESIGN TOKENS
+================================================================================
+Pwestora adheres to modern, high-conversion UI design principles:
+- Micro-interactions: Animated tab switching and smooth calendar transitions.
+- Visual Hierarchy: High-contrast deep navy headers paired with crisp white cards.
+- Accessibility: High color contrast ratio on text tokens (`AppColors.ink900`,
+  `AppColors.ink700`) on top of soft background canvases (`AppColors.bg`).
+- Tactile Feedback: Soft rounded corners (`radius: 18` and `radius: 28` squircles)
+  creating a polished, native feel.
+
+================================================================================
+10. SECURITY, RESILIENCY & BEST PRACTICES
+================================================================================
+1. Token-Based Authentication: All sensitive mutations and tenant records require
+   a valid JSON Web Token (JWT) transmitted via standard Authorization headers.
+2. Graceful Error Handling: Custom `ApiException` handles network timeouts, server
+   errors, and malformed responses with user-friendly alerts.
+3. Offline Resilience: Essential user metadata and recently viewed listings are
+   cached locally to provide responsive feedback even on unstable connections.
+4. Input Sanitation: All forms implement strict client-side validation to prevent
+   invalid payloads.
+
+================================================================================
+11. FUTURE ROADMAP & EXTENSIBILITY
+================================================================================
+1. Digital Payment Gateway Integration: Direct in-app settlement of monthly rent dues
+   via GCash, Maya, credit cards, and online bank transfers.
+2. In-App Direct Messaging & Push Notifications: Instant real-time chat with lessors
+   and push notifications for maintenance stage updates.
+3. Digital Lease Contract Signing: Integration with PDF viewers and electronic
+   signature services for paperless lease execution.
+4. IoT Smart Metering: Real-time tracking of stall electricity and sub-metered water
+   consumption directly on the tenant dashboard.
+
+================================================================================
+12. CONCLUSION
+================================================================================
+Pwestora offers a comprehensive, elegant, and efficient solution to the complex
+challenges of commercial space leasing and tenant operations. By coupling a
+dynamic dual-mode interface with a rigorous 8-stage maintenance tracking system
+and an interactive schedule calendar, Pwestora sets a new standard for modern
+commercial property management applications.
+
+================================================================================
+                          [ END OF TECHNICAL PAPER ]
+================================================================================

@@ -1,0 +1,17 @@
+DirectoryIndex index.php
+
+# Never allow the schema.sql or config.php to be downloaded directly
+<FilesMatch "^(schema\.sql|config\.php\.bak)$">
+  Require all denied
+</FilesMatch>
+
+# Force HTTPS (Hostinger issues a free SSL cert on your domain)
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+</IfModule>
