@@ -82,19 +82,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                     expandedHeight: 320,
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ),
+                    leading: const AppBackButton(isDark: true),
                     flexibleSpace: FlexibleSpaceBar(
                       background: photos.isNotEmpty
                           ? Stack(

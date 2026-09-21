@@ -158,12 +158,15 @@ class _ApplyScreenState extends State<ApplyScreen> {
         title: Text(_currentStep == 0 ? 'Lease Proposal' : 'Negotiate Contract Terms'),
         backgroundColor: AppColors.surface,
         elevation: 0,
-        leading: _currentStep == 1
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => setState(() => _currentStep = 0),
-              )
-            : null,
+        leading: AppBackButton(
+          onPressed: () {
+            if (_currentStep == 1) {
+              setState(() => _currentStep = 0);
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

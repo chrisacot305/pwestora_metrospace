@@ -39,6 +39,7 @@ class _MyApplicationsScreenState extends State<MyApplicationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('My Applications'),
         backgroundColor: AppColors.surface,
         elevation: 0,

@@ -67,6 +67,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('Maintenance & Reports'),
         backgroundColor: AppColors.surface,
         elevation: 0,

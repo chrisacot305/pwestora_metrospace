@@ -63,68 +63,78 @@ class _BrowseScreenState extends State<BrowseScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             slivers: [
-              // Top Bar: Location & Header (Dripzy Style)
+              // Top Bar: Location & Header
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 18, 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on, color: AppColors.primary, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Bacolod City · Negros Occidental',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.ink500,
+                          if (Navigator.canPop(context))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Material(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(14),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () => Navigator.of(context).pop(),
+                                  child: Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: const Icon(Icons.arrow_back_rounded, color: AppColors.ink900, size: 20),
+                                  ),
                                 ),
                               ),
-                              const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.ink500),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Explore Spaces',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.ink900,
-                              letterSpacing: -0.5,
                             ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.location_on, color: AppColors.primary, size: 16),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Bacolod City · Negros Occidental',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.ink500,
+                                    ),
+                                  ),
+                                  Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.ink500),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Explore Spaces',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.ink900,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      Row(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Image.asset('img/Frame 2.png', fit: BoxFit.contain),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: const Icon(Icons.notifications_none_rounded, color: AppColors.ink900, size: 22),
-                          ),
-                        ],
+                      Container(
+                        width: 42,
+                        height: 42,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Image.asset('img/Frame 2.png', fit: BoxFit.contain),
                       ),
                     ],
                   ),

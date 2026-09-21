@@ -2,23 +2,43 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
-import 'tickets_list_screen.dart';
-import 'coming_soon_screen.dart';
+import 'lease_contract_screen.dart';
+import 'violation_notice_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final Map<String, dynamic>? lease;
+  const ProfileScreen({super.key, this.lease});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String? _name;
+  String _name = 'Juan Dela Cruz';
+  Map<String, dynamic>? _leaseData;
+  int _demoStrike = 0;
 
   @override
   void initState() {
     super.initState();
-    ApiService.getUserName().then((v) => setState(() => _name = v));
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final name = await ApiService.getUserName();
+    final strike = await ApiService.getDemoStrikeLevel();
+    if (mounted) {
+      setState(() {
+        if (name != null && name.isNotEmpty) _name = name;
+        _demoStrike = strike;
+      });
+    }
+    if (widget.lease != null) {
+      setState(() => _leaseData = widget.lease);
+    } else {
+      final l = await ApiService.fetchLeaseStatus();
+      if (mounted) setState(() => _leaseData = l);
+    }
   }
 
   Future<void> _logout() async {
@@ -30,288 +50,593 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _openLeaseStanding() async {
+    final violations = await ApiService.fetchViolations();
+    if (!mounted) return;
+    if (violations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: const [
+              Icon(Icons.verified_rounded, color: AppColors.success, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Account Status: Good Standing. Zero infractions on record.',
+                  style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      await ViolationNoticeSheet.show(
+        context,
+        violation: violations.first,
+        isGated: false,
+      );
+      _loadProfile();
+    }
+  }
+
+  void _showComingSoon(String title) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$title is available in this section.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final unit = _leaseData?['unit_label'] ?? 'Unit 302 • 3rd Floor';
+    final leaseNumber = 'Lease #LS-2026-${(_leaseData?['tenant_id'] ?? '032').toString().padLeft(3, '0')}';
+
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        title: const Text('Account & Services'),
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-      ),
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Profile Header Card
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: AppDecorations.card(radius: 20, shadow: true),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: AppDecorations.squircle(
-                    color: AppColors.primary,
-                    radius: 18,
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _name ?? 'Tenant User',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.ink900,
-                          letterSpacing: -0.3,
+      body: SafeArea(
+        bottom: false,
+        child: CustomScrollView(
+          slivers: [
+            // Top Profile Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Row(
+                  children: [
+                    // Avatar
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                        ),
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 22,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: AppDecorations.badge(
-                          bg: AppColors.accentSoft,
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified_user,
-                              size: 12,
-                              color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Name & Unit
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink900,
+                              letterSpacing: -0.3,
                             ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Verified Tenant',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            unit,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.ink500,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Lease Information Card
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: AppDecorations.card(radius: 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Lease Information',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.ink900,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                '$leaseNumber\nEnds Dec 31, 2027',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.ink500,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
+                      ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
 
-          const Text(
-            'Tenant Hub & Tools',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink900,
-            ),
-          ),
-          const SizedBox(height: 12),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-          _hubItem(
-            icon: Icons.build_outlined,
-            iconColor: AppColors.primary,
-            iconBg: AppColors.accentSoft,
-            label: 'Maintenance Reports',
-            note: 'Submit issues and track real-time resolution',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const TicketsListScreen()),
-            ),
-          ),
-          _hubItem(
-            icon: Icons.receipt_long_outlined,
-            iconColor: AppColors.primary,
-            iconBg: AppColors.accentSoft,
-            label: 'Installment Requests',
-            note: 'Request a customized payment schedule',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ComingSoonScreen(
-                  title: 'Installment Requests',
-                  icon: Icons.receipt_long_outlined,
-                  message:
-                      "Requesting a payment plan from the app is in progress and coming soon.",
-                ),
+            // Section 1: Account
+            _buildSectionHeader('Account'),
+            _buildSectionGroup([
+              _buildMenuItem(
+                icon: Icons.person_outline_rounded,
+                title: 'Personal Information',
+                onTap: () => _showComingSoon('Personal Information'),
               ),
-            ),
-          ),
-          _hubItem(
-            icon: Icons.warning_amber_outlined,
-            iconColor: AppColors.warning,
-            iconBg: AppColors.warningSoft,
-            label: 'Violations & Notices',
-            note: 'View lease compliance or property notices',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ComingSoonScreen(
-                  title: 'Violations',
-                  icon: Icons.warning_amber_outlined,
-                  message:
-                      "Viewing violation logs from the app is coming soon.",
-                ),
+              _buildMenuItem(
+                icon: Icons.contact_mail_outlined,
+                title: 'Contact Information',
+                onTap: () => _showComingSoon('Contact Information'),
               ),
-            ),
-          ),
-          _hubItem(
-            icon: Icons.description_outlined,
-            iconColor: AppColors.primary,
-            iconBg: AppColors.accentSoft,
-            label: 'Lease Contract & Files',
-            note: 'Access digitally signed agreement documents',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ComingSoonScreen(
-                  title: 'Documents',
-                  icon: Icons.description_outlined,
-                  message:
-                      "Document downloads and digital files are coming soon.",
-                ),
-              ),
-            ),
-          ),
-          _hubItem(
-            icon: Icons.payments_outlined,
-            iconColor: AppColors.success,
-            iconBg: AppColors.successSoft,
-            label: 'Payment History',
-            note: 'Review transaction records and receipts',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ComingSoonScreen(
-                  title: 'Payment History',
-                  icon: Icons.payments_outlined,
-                  message:
-                      "Payment history and receipt exports are coming soon.",
-                ),
-              ),
-            ),
-          ),
+            ]),
 
-          const SizedBox(height: 24),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-          // Logout Button
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout, color: AppColors.error, size: 18),
-              label: const Text(
-                'Log Out of Account',
-                style: TextStyle(
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w700,
-                ),
+            // Section 2: Payments
+            _buildSectionHeader('Payments'),
+            _buildSectionGroup([
+              _buildMenuItem(
+                icon: Icons.receipt_long_outlined,
+                title: 'Payment History',
+                onTap: () => _showComingSoon('Payment History'),
               ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              _buildMenuItem(
+                icon: Icons.description_outlined,
+                title: 'Receipts',
+                onTap: () => _showComingSoon('Receipts'),
               ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('img/Frame 2.png', width: 18, height: 18),
-                const SizedBox(width: 8),
-                const Text(
-                  'Pwestora Commercial · v0.1.0',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.ink500,
-                    fontWeight: FontWeight.w600,
+            ]),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+            // Section 3: Documents & Compliance
+            _buildSectionHeader('Documents & Compliance'),
+            _buildSectionGroup([
+              _buildStandingMenuItem(),
+              _buildMenuItem(
+                icon: Icons.assignment_outlined,
+                title: 'Lease Agreement',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                  );
+                },
+              ),
+              _buildMenuItem(
+                icon: Icons.gavel_outlined,
+                title: 'Contract Guidelines',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                  );
+                },
+              ),
+            ]),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+            // Section 4: Conflict Resolution Demo Switcher (Section C)
+            _buildSectionHeader('Demo Mode: Conflict Resolution (Section C)'),
+            _buildDemoSection(),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+            // Section 5: Settings
+            _buildSectionHeader('Settings'),
+            _buildSectionGroup([
+              _buildMenuItem(
+                icon: Icons.notifications_none_rounded,
+                title: 'Notifications',
+                onTap: () => _showComingSoon('Notifications'),
+              ),
+              _buildMenuItem(
+                icon: Icons.shield_outlined,
+                title: 'Security',
+                onTap: () => _showComingSoon('Security Settings'),
+              ),
+              _buildMenuItem(
+                icon: Icons.help_outline_rounded,
+                title: 'Help & Support',
+                onTap: () => _showComingSoon('Help & Support'),
+              ),
+            ]),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // Logout Button
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: TextButton.icon(
+                  onPressed: _logout,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.logout_rounded, size: 20),
+                  label: const Text(
+                    'Sign Out',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-        ],
+
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 100),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _hubItem({
+  Widget _buildSectionHeader(String title) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink400,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionGroup(List<Widget> items) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          decoration: AppDecorations.card(radius: 18),
+          child: Column(
+            children: List.generate(items.length, (i) {
+              return Column(
+                children: [
+                  items[i],
+                  if (i < items.length - 1)
+                    const Divider(color: AppColors.border, height: 1, indent: 52),
+                ],
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
     required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
-    required String label,
-    required String note,
+    required String title,
     required VoidCallback onTap,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: AppDecorations.card(radius: 16),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: AppColors.ink700),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink900,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink400),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStandingMenuItem() {
+    String badgeText = 'Good Standing';
+    Color badgeColor = AppColors.success;
+    Color badgeSoft = const Color(0xFFECFDF5);
+    IconData badgeIcon = Icons.check_circle_rounded;
+
+    if (_demoStrike == 1) {
+      badgeText = '1 Warning';
+      badgeColor = const Color(0xFF0284C7);
+      badgeSoft = const Color(0xFFEFF6FF);
+      badgeIcon = Icons.info_outline_rounded;
+    } else if (_demoStrike == 2) {
+      badgeText = '₱500 Fine';
+      badgeColor = const Color(0xFF1E6BFF);
+      badgeSoft = const Color(0xFFDBEAFE);
+      badgeIcon = Icons.receipt_long_rounded;
+    } else if (_demoStrike >= 3) {
+      badgeText = 'Critical Breach';
+      badgeColor = AppColors.error;
+      badgeSoft = const Color(0xFFFEE2E2);
+      badgeIcon = Icons.gavel_rounded;
+    }
+
+    return InkWell(
+      onTap: _openLeaseStanding,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: badgeSoft,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.verified_user_outlined, size: 18, color: badgeColor),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Account & Lease Standing',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink900,
+                    ),
+                  ),
+                  SizedBox(height: 1),
+                  Text(
+                    'Compliance records & citations',
+                    style: TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeSoft,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, size: 12, color: badgeColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    badgeText,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: badgeColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink400),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoSection() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.electricBlue.withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.electricBlue.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.touch_app_rounded, size: 16, color: AppColors.electricBlue),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Live Presentation Scenario Switcher',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Select a strike stage below, then navigate to Home to experience the live escalation gate.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildScenarioChip(
+                    level: 0,
+                    label: '0: Clean Tenant',
+                    color: AppColors.success,
+                    icon: Icons.check_circle_rounded,
+                  ),
+                  _buildScenarioChip(
+                    level: 1,
+                    label: 'Strike 1: Warning',
+                    color: const Color(0xFF0284C7),
+                    icon: Icons.info_outline_rounded,
+                  ),
+                  _buildScenarioChip(
+                    level: 2,
+                    label: 'Strike 2: Fined (₱500)',
+                    color: const Color(0xFF1E6BFF),
+                    icon: Icons.receipt_long_rounded,
+                  ),
+                  _buildScenarioChip(
+                    level: 3,
+                    label: 'Strike 3: Eviction',
+                    color: AppColors.error,
+                    icon: Icons.gavel_rounded,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScenarioChip({
+    required int level,
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    final isSelected = _demoStrike == level;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        await ApiService.setDemoStrikeLevel(level);
+        setState(() => _demoStrike = level);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: AppDecorations.squircle(
-                    color: iconBg,
-                    radius: 12,
-                  ),
-                  child: Icon(icon, size: 20, color: iconColor),
-                ),
-                const SizedBox(width: 14),
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        note,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.ink500,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Switched to Scenario: $label. Switch to Home tab to test!',
+                    style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.w600),
                   ),
-                ),
-                const Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: AppColors.ink300,
                 ),
               ],
             ),
           ),
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : color.withValues(alpha: 0.3),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? Colors.white : color,
+              ),
+            ),
+          ],
         ),
       ),
     );

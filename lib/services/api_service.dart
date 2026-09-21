@@ -237,6 +237,13 @@ class ApiService {
     return data['ticket_id'] as int;
   }
 
+  // ---------------- Payments ----------------
+
+  static Future<List<dynamic>> fetchPayments() async {
+    final data = await _getJson('payments_list.php', auth: true);
+    return data['payments'] as List<dynamic>;
+  }
+
   // ---------------- Messages ----------------
 
   static Future<Map<String, dynamic>> fetchMessagesThread() async {
@@ -246,5 +253,133 @@ class ApiService {
 
   static Future<void> sendMessage(String text) async {
     await _postJson('messages_send.php', {'body': text}, auth: true);
+  }
+
+  // ---------------- Installment / Payment Arrangements ----------------
+
+  static Future<List<dynamic>> fetchInstallmentRequests() async {
+    try {
+      final data = await _getJson('requests_list.php', auth: true);
+      return data['requests'] as List<dynamic>? ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<int> createInstallmentRequest({
+    required String reason,
+    required String planLabel,
+  }) async {
+    final data = await _postJson('requests_create.php', {
+      'reason': reason,
+      'plan_label': planLabel,
+    }, auth: true);
+    return data['request_id'] as int;
+  }
+
+  // ---------------- Conflict Resolution / Violations (Section C) ----------------
+
+  static const String _kDemoStrikeKey = 'demo_violation_strike_level';
+  static const String _kAcknowledgedStrikesKey = 'demo_acknowledged_strikes';
+
+  static Future<int> getDemoStrikeLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kDemoStrikeKey) ?? 0;
+  }
+
+  static Future<void> setDemoStrikeLevel(int level) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kDemoStrikeKey, level);
+    // Reset acknowledged set if we switch levels
+    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    if (level == 0) {
+      await prefs.remove(_kAcknowledgedStrikesKey);
+    } else {
+      // Remove this level from acknowledged list so modal triggers
+      ackList.remove(level.toString());
+      await prefs.setStringList(_kAcknowledgedStrikesKey, ackList);
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchViolations() async {
+    try {
+      final data = await _getJson('violations_list.php', auth: true);
+      final raw = (data['violations'] as List<dynamic>?) ?? [];
+      if (raw.isNotEmpty) {
+        return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {
+      // Offline or demo fallback
+    }
+
+    // Fallback based on Demo Strike Level
+    final level = await getDemoStrikeLevel();
+    if (level <= 0) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    final isAck = ackList.contains(level.toString());
+
+    final list = <Map<String, dynamic>>[];
+    if (level >= 1) {
+      list.add({
+        'id': 101,
+        'category': 'Late Operating Hours',
+        'strike': 1,
+        'clause': 'Clause 8.2 — Standard Operating Hours & Curfew',
+        'description': 'Stall was observed operating past the mandated commercial closing time of 10:00 PM without prior written permit.',
+        'penalty_amount': 0.0,
+        'issued_at': '2026-09-18 22:45:00',
+        'acknowledged': (level > 1 || isAck) ? 1 : 0,
+        'image_url': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80',
+      });
+    }
+    if (level >= 2) {
+      list.add({
+        'id': 102,
+        'category': 'Improper Waste Disposal',
+        'strike': 2,
+        'clause': 'Clause 12.4 — Common Area Sanitation & Waste Disposal',
+        'description': 'Commercial garbage bins left outside stall perimeter during non-collection hours, obstructing common hallway walkway.',
+        'penalty_amount': 500.0,
+        'issued_at': '2026-09-20 09:15:00',
+        'acknowledged': (level > 2 || isAck) ? 1 : 0,
+        'image_url': 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=500&q=80',
+      });
+    }
+    if (level >= 3) {
+      list.add({
+        'id': 103,
+        'category': 'Unauthorized Structural Alteration',
+        'strike': 3,
+        'clause': 'Clause 15.1 — Structural Modifications & Safety Standards',
+        'description': 'Heavy electrical wiring installation performed without management authorization and safety inspection permit. Chronic breach threshold reached.',
+        'penalty_amount': 1500.0,
+        'issued_at': '2026-09-21 14:30:00',
+        'acknowledged': isAck ? 1 : 0,
+        'image_url': 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80',
+      });
+    }
+    return list.reversed.toList();
+  }
+
+  static Future<bool> acknowledgeViolation(int violationId, {int? strike}) async {
+    try {
+      final res = await _postJson('violations_acknowledge.php', {
+        'violation_id': violationId,
+      }, auth: true);
+      if (res['ok'] == true) return true;
+    } catch (_) {}
+
+    // Save locally for demo mode
+    final prefs = await SharedPreferences.getInstance();
+    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    if (strike != null) {
+      if (!ackList.contains(strike.toString())) {
+        ackList.add(strike.toString());
+        await prefs.setStringList(_kAcknowledgedStrikesKey, ackList);
+      }
+    }
+    return true;
   }
 }

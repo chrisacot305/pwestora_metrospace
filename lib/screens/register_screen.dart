@@ -60,6 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('Create Account'),
         backgroundColor: AppColors.surface,
         elevation: 0,

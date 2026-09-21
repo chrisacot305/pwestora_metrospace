@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $lessee = require_lessee_auth($pdo);
 
 $stmt = $pdo->prepare(
-    "SELECT t.id AS tenant_id, t.created_at AS since,
+    "SELECT t.id AS tenant_id, t.created_at AS since, t.unit_label,
             p.name AS property_name, p.address AS property_address, p.type AS property_type,
             u.company_name AS lessor_name,
             a.rent, a.term_months

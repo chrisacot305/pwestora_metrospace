@@ -17,6 +17,7 @@ class TicketDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: Text('Ticket #MT-${ticket['id']}'),
         backgroundColor: AppColors.surface,
         elevation: 0,

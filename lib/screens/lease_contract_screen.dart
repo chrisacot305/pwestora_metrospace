@@ -153,6 +153,7 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('Lease Agreement & Terms'),
         backgroundColor: AppColors.surface,
         elevation: 0,
