@@ -86,9 +86,6 @@ class _HomeShellState extends State<HomeShell> {
                   onLeaseMayHaveChanged: _recheckLease,
                   isTab: true,
                 ),
-                MessagesScreen(
-                  onNavigateTab: (idx) => setState(() => _currentIndex = idx),
-                ),
                 ProfileScreen(
                   lease: null,
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
@@ -237,13 +234,6 @@ class _HomeShellState extends State<HomeShell> {
             ),
             _buildDockItem(
               targetIndex: 2,
-              currentIndex: currentIndex,
-              icon: Icons.chat_bubble_rounded,
-              outlineIcon: Icons.chat_bubble_outline_rounded,
-              label: 'Chat',
-            ),
-            _buildDockItem(
-              targetIndex: 3,
               currentIndex: currentIndex,
               icon: Icons.person_rounded,
               outlineIcon: Icons.person_outline_rounded,

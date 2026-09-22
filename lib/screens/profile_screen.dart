@@ -199,124 +199,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
 
-            // Lease Information or Applicant Card
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: hasLease
-                    ? InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: AppDecorations.card(radius: 18),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Lease Information',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.ink900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$leaseNumber\nEnds Dec 31, 2027',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.ink500,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
+            // Lease Information Card (Only for Active Tenants)
+            if (hasLease) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: AppDecorations.card(radius: 18),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Lease Information',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink900,
+                                  ),
                                 ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$leaseNumber\nEnds Dec 31, 2027',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.ink500,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                    : InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () {
-                          if (widget.onNavigateTab != null) {
-                            widget.onNavigateTab!(1); // Applications tab in applicant mode
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.06),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: AppColors.accentSoft,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.assignment_outlined,
-                                  color: AppColors.accent,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'Application Status',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.ink900,
-                                      ),
-                                    ),
-                                    SizedBox(height: 3),
-                                    Text(
-                                      'View negotiations, checklist & contract progress',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.ink500,
-                                        height: 1.2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
-                            ],
-                          ),
-                        ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
+                        ],
                       ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            ] else ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            ],
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-            // Section 1: Account
+            // Section 1: Account (Basic Information)
             _buildSectionHeader('Account'),
             _buildSectionGroup([
               _buildMenuItem(
@@ -333,74 +269,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Section 2: Payments
-            _buildSectionHeader('Payments'),
-            _buildSectionGroup([
-              _buildMenuItem(
-                icon: Icons.receipt_long_outlined,
-                title: 'Payment History',
-                onTap: () => _showComingSoon('Payment History'),
-              ),
-              _buildMenuItem(
-                icon: Icons.description_outlined,
-                title: 'Receipts',
-                onTap: () => _showComingSoon('Receipts'),
-              ),
-            ]),
+            // Tenant-Only Sections (Payments, Documents, Compliance, Demo)
+            if (hasLease) ...[
+              // Section 2: Payments
+              _buildSectionHeader('Payments'),
+              _buildSectionGroup([
+                _buildMenuItem(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Payment History',
+                  onTap: () => _showComingSoon('Payment History'),
+                ),
+                _buildMenuItem(
+                  icon: Icons.description_outlined,
+                  title: 'Receipts',
+                  onTap: () => _showComingSoon('Receipts'),
+                ),
+              ]),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Section 3: Documents & Compliance
-            _buildSectionHeader('Documents & Compliance'),
-            _buildSectionGroup([
-              _buildStandingMenuItem(),
-              _buildMenuItem(
-                icon: Icons.assignment_outlined,
-                title: 'Lease Agreement',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
-                  );
-                },
-              ),
-              _buildMenuItem(
-                icon: Icons.gavel_outlined,
-                title: 'Contract Guidelines',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
-                  );
-                },
-              ),
-            ]),
+              // Section 3: Documents & Compliance
+              _buildSectionHeader('Documents & Compliance'),
+              _buildSectionGroup([
+                _buildStandingMenuItem(),
+                _buildMenuItem(
+                  icon: Icons.assignment_outlined,
+                  title: 'Lease Agreement',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  icon: Icons.gavel_outlined,
+                  title: 'Contract Guidelines',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                    );
+                  },
+                ),
+              ]),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Section 4: Conflict Resolution Demo Switcher (Section C)
-            _buildSectionHeader('Demo Mode: Conflict Resolution (Section C)'),
-            _buildDemoSection(),
+              // Section 4: Conflict Resolution Demo Switcher (Section C)
+              _buildSectionHeader('Demo Mode: Conflict Resolution (Section C)'),
+              _buildDemoSection(),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Section 5: Settings
-            _buildSectionHeader('Settings'),
-            _buildSectionGroup([
-              _buildMenuItem(
-                icon: Icons.notifications_none_rounded,
-                title: 'Notifications',
-                onTap: () => _showComingSoon('Notifications'),
-              ),
-              _buildMenuItem(
-                icon: Icons.shield_outlined,
-                title: 'Security',
-                onTap: () => _showComingSoon('Security Settings'),
-              ),
-              _buildMenuItem(
-                icon: Icons.help_outline_rounded,
-                title: 'Help & Support',
-                onTap: () => _showComingSoon('Help & Support'),
-              ),
-            ]),
+              // Section 5: Settings (Tenant)
+              _buildSectionHeader('Settings'),
+              _buildSectionGroup([
+                _buildMenuItem(
+                  icon: Icons.notifications_none_rounded,
+                  title: 'Notifications',
+                  onTap: () => _showComingSoon('Notifications'),
+                ),
+                _buildMenuItem(
+                  icon: Icons.shield_outlined,
+                  title: 'Security',
+                  onTap: () => _showComingSoon('Security Settings'),
+                ),
+                _buildMenuItem(
+                  icon: Icons.help_outline_rounded,
+                  title: 'Help & Support',
+                  onTap: () => _showComingSoon('Help & Support'),
+                ),
+              ]),
+            ] else ...[
+              // Help & Support Section (Applicant)
+              _buildSectionHeader('Support'),
+              _buildSectionGroup([
+                _buildMenuItem(
+                  icon: Icons.help_outline_rounded,
+                  title: 'Help & Support',
+                  onTap: () => _showComingSoon('Help & Support'),
+                ),
+              ]),
+            ],
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
