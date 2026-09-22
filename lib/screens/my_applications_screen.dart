@@ -11,7 +11,8 @@ num _asNum(dynamic v) {
 
 class MyApplicationsScreen extends StatefulWidget {
   final Future<void> Function()? onLeaseMayHaveChanged;
-  const MyApplicationsScreen({super.key, this.onLeaseMayHaveChanged});
+  final bool isTab;
+  const MyApplicationsScreen({super.key, this.onLeaseMayHaveChanged, this.isTab = false});
 
   @override
   State<MyApplicationsScreen> createState() => _MyApplicationsScreenState();
@@ -39,7 +40,8 @@ class _MyApplicationsScreenState extends State<MyApplicationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        leading: const AppBackButton(),
+        automaticallyImplyLeading: !widget.isTab,
+        leading: widget.isTab ? null : const AppBackButton(),
         title: const Text('My Applications'),
         backgroundColor: AppColors.surface,
         elevation: 0,

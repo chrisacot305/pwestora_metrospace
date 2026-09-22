@@ -7,7 +7,15 @@ import 'violation_notice_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Map<String, dynamic>? lease;
-  const ProfileScreen({super.key, this.lease});
+  final Function(int)? onNavigateTab;
+  final Future<void> Function()? onLeaseMayHaveChanged;
+
+  const ProfileScreen({
+    super.key,
+    this.lease,
+    this.onNavigateTab,
+    this.onLeaseMayHaveChanged,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -22,6 +30,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lease != widget.lease) {
+      _loadProfile();
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -91,7 +107,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final unit = _leaseData?['unit_label'] ?? 'Unit 302 • 3rd Floor';
+    final hasLease = _leaseData != null;
+    final unit = hasLease
+        ? (_leaseData?['unit_label'] ?? 'Unit 302 • 3rd Floor')
+        : 'Applicant / Prospective Tenant';
     final leaseNumber = 'Lease #LS-2026-${(_leaseData?['tenant_id'] ?? '032').toString().padLeft(3, '0')}';
 
     return Scaffold(
@@ -137,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(width: 16),
 
-                    // Name & Unit
+                    // Name & Unit / Applicant Status
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,12 +171,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 3),
-                          Text(
-                            unit,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.ink500,
-                              fontWeight: FontWeight.w500,
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: hasLease ? 0 : 8,
+                              vertical: hasLease ? 0 : 2,
+                            ),
+                            decoration: hasLease
+                                ? null
+                                : BoxDecoration(
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                            child: Text(
+                              unit,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: hasLease ? AppColors.ink500 : AppColors.accent,
+                                fontWeight: hasLease ? FontWeight.w500 : FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -168,51 +199,118 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
 
-            // Lease Information Card
+            // Lease Information or Applicant Card
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppDecorations.card(radius: 18),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                child: hasLease
+                    ? InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: AppDecorations.card(radius: 18),
+                          child: Row(
                             children: [
-                              const Text(
-                                'Lease Information',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink900,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Lease Information',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.ink900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$leaseNumber\nEnds Dec 31, 2027',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.ink500,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$leaseNumber\nEnds Dec 31, 2027',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.ink500,
-                                  height: 1.3,
-                                ),
-                              ),
+                              const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
                             ],
                           ),
                         ),
-                        const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
-                      ],
-                    ),
-                  ),
-                ),
+                      )
+                    : InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () {
+                          if (widget.onNavigateTab != null) {
+                            widget.onNavigateTab!(1); // Applications tab in applicant mode
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.06),
+                                blurRadius: 14,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.assignment_outlined,
+                                  color: AppColors.accent,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Application Status',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.ink900,
+                                      ),
+                                    ),
+                                    SizedBox(height: 3),
+                                    Text(
+                                      'View negotiations, checklist & contract progress',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.ink500,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                      ),
               ),
             ),
 

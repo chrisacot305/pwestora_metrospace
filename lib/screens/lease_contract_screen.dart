@@ -6,11 +6,13 @@ import '../services/api_service.dart';
 class LeaseContractScreen extends StatefulWidget {
   final Map<String, dynamic>? applicationData;
   final bool forceInitialLock;
+  final Future<void> Function()? onLeaseMayHaveChanged;
 
   const LeaseContractScreen({
     super.key,
     this.applicationData,
     this.forceInitialLock = false,
+    this.onLeaseMayHaveChanged,
   });
 
   @override
@@ -126,12 +128,16 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
   void _simulateCompletePayment() {
     HapticFeedback.heavyImpact();
     setState(() => _isSimulatingPayment = true);
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    Future.delayed(const Duration(milliseconds: 1200), () async {
       if (!mounted) return;
       setState(() {
         _isSimulatingPayment = false;
         _isPaymentComplete = true;
       });
+      if (widget.onLeaseMayHaveChanged != null) {
+        await widget.onLeaseMayHaveChanged!();
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Initial payment verified! Legal contract confidentiality lock unlocked.'),
