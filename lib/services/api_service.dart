@@ -162,17 +162,41 @@ class ApiService {
     required int termMonths,
     required double rent,
     Map<String, dynamic>? checklistNegotiation,
+    Map<String, Map<String, dynamic>>? documents,
   }) async {
-    final body = <String, dynamic>{
-      'property_id': propertyId,
-      'business_name': businessName,
-      'term_months': termMonths,
-      'rent': rent,
-    };
-    if (checklistNegotiation != null) {
-      body['checklist_negotiation'] = checklistNegotiation;
+    final token = await getToken();
+    final uri = Uri.parse('$baseUrl/applications_create.php');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
     }
-    final data = await _postJson('applications_create.php', body, auth: true);
+
+    request.fields['property_id'] = propertyId.toString();
+    request.fields['business_name'] = businessName;
+    request.fields['term_months'] = termMonths.toString();
+    request.fields['rent'] = rent.toString();
+    if (checklistNegotiation != null) {
+      request.fields['checklist_negotiation'] = jsonEncode(checklistNegotiation);
+    }
+
+    if (documents != null) {
+      for (final entry in documents.entries) {
+        final key = entry.key;
+        final doc = entry.value;
+        final bytes = doc['bytes'] as List<int>?;
+        final filename = doc['filename'] as String? ?? '$key.jpg';
+        if (bytes != null && bytes.isNotEmpty) {
+          request.files.add(
+            http.MultipartFile.fromBytes(key, bytes, filename: filename),
+          );
+        }
+      }
+    }
+
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
+    final data = _handleResponse(res);
     return data['application_id'] as int;
   }
 

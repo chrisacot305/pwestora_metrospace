@@ -63,18 +63,19 @@ class _BrowseScreenState extends State<BrowseScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             slivers: [
-              // Top Bar: Location & Header
+              // Top Bar: Header & Logo
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 18, 10),
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Row(
                         children: [
                           if (Navigator.canPop(context))
                             Padding(
-                              padding: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.only(right: 10),
                               child: Material(
                                 color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(14),
@@ -82,57 +83,50 @@ class _BrowseScreenState extends State<BrowseScreen> {
                                   borderRadius: BorderRadius.circular(14),
                                   onTap: () => Navigator.of(context).pop(),
                                   child: Container(
-                                    width: 42,
-                                    height: 42,
+                                    width: 44,
+                                    height: 44,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: AppColors.border),
+                                      border: Border.all(color: AppColors.border.withValues(alpha: 0.9)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primary.withValues(alpha: 0.04),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
                                     ),
                                     child: const Icon(Icons.arrow_back_rounded, color: AppColors.ink900, size: 20),
                                   ),
                                 ),
                               ),
                             ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: const [
-                                  Icon(Icons.location_on, color: AppColors.primary, size: 16),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Bacolod City · Negros Occidental',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.ink500,
-                                    ),
-                                  ),
-                                  Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.ink500),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Explore Spaces',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.ink900,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ],
+                          const Text(
+                            'Explore Spaces',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.ink900,
+                              letterSpacing: -0.5,
+                            ),
                           ),
                         ],
                       ),
                       Container(
-                        width: 42,
-                        height: 42,
-                        padding: const EdgeInsets.all(8),
+                        width: 44,
+                        height: 44,
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: AppColors.border.withValues(alpha: 0.9)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Image.asset('img/Frame 2.png', fit: BoxFit.contain),
                       ),
@@ -141,7 +135,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 ),
               ),
 
-              // Search Bar & Filter Button (Dripzy Style)
+              // Search Bar & Map Button
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
@@ -154,6 +148,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: TextField(
                             controller: _searchCtrl,
@@ -201,20 +202,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: AppColors.border),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.03),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: const Icon(Icons.map_outlined, color: AppColors.ink900, size: 20),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
                       ),
                     ],
                   ),
@@ -624,6 +622,8 @@ class _DripzyGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final coverPhoto = property['cover_photo'] as String?;
     final type = (property['type'] ?? 'RETAIL').toString().toUpperCase();
+    final rawRent = property['asking_rent'] ?? property['rent'];
+    final double? rent = rawRent != null ? double.tryParse(rawRent.toString()) : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -773,27 +773,53 @@ class _DripzyGridCard extends StatelessWidget {
                       ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
-                            child: Text(
-                              property['lessor_name'] ?? 'Verified',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                color: AppColors.accent,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            child: (rent != null && rent > 0)
+                                ? RichText(
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    text: TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: '₱${_formatCardMoney(rent)}',
+                                          style: const TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.primary,
+                                            letterSpacing: -0.2,
+                                            fontFamily: 'Roboto',
+                                          ),
+                                        ),
+                                        const TextSpan(
+                                          text: ' /mo',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.ink500,
+                                            fontFamily: 'Roboto',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : const Text(
+                                    'Inquire Rate',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.ink500,
+                                    ),
+                                  ),
                           ),
                           Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(5),
                             decoration: BoxDecoration(
                               color: AppColors.accentSoft,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.arrow_forward, size: 12, color: AppColors.primary),
+                            child: const Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
                           ),
                         ],
                       ),
@@ -806,5 +832,11 @@ class _DripzyGridCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatCardMoney(double amount) {
+    final whole = amount.toStringAsFixed(0);
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return whole.replaceAllMapped(reg, (Match m) => '${m[1]},');
   }
 }

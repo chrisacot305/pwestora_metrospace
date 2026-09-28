@@ -137,11 +137,17 @@ if ($reviewId) {
 <div class="card" style="padding:0; overflow:hidden; margin-bottom:28px;">
   <div class="table-scroll">
   <table>
-    <thead><tr><th>Applicant</th><th>Property</th><th>Term</th><th>Rent</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Applicant</th><th>Property</th><th>Term</th><th>Rent</th><th>Documents</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
     <tbody>
       <?php if (!$applications): ?>
-        <tr><td colspan="7" style="text-align:center; color:var(--ink-500);">No applications yet.</td></tr>
-      <?php else: foreach ($applications as $a): ?>
+        <tr><td colspan="8" style="text-align:center; color:var(--ink-500);">No applications yet.</td></tr>
+      <?php else: foreach ($applications as $a): 
+          $appDocs = 0;
+          if (!empty($a['valid_id_path'])) $appDocs++;
+          if (!empty($a['sec_dti_path'])) $appDocs++;
+          if (!empty($a['business_permit_path'])) $appDocs++;
+          if (!empty($a['bir_cert_path'])) $appDocs++;
+      ?>
         <tr>
           <td style="font-weight:600;">
             <?= htmlspecialchars($a['tenant_name']) ?>
@@ -152,6 +158,15 @@ if ($reviewId) {
           <td style="color:var(--ink-500);"><?= htmlspecialchars($a['property_name']) ?></td>
           <td style="color:var(--ink-500);"><?= (int) $a['term_months'] ?> mo</td>
           <td style="color:var(--ink-500);">₱<?= number_format($a['rent'], 0) ?></td>
+          <td>
+            <?php if ($appDocs > 0): ?>
+              <span class="badge" style="background:#e6f4ea; color:#137333; font-weight:600;">
+                <i class="bi bi-file-earmark-check"></i> <?= $appDocs ?>/4 Docs
+              </span>
+            <?php else: ?>
+              <span style="font-size:11.5px; color:var(--ink-400);">None</span>
+            <?php endif; ?>
+          </td>
           <td style="color:var(--ink-500);"><?= (new DateTime($a['submitted_at']))->format('M j') ?></td>
           <td>
             <?php if ($a['status'] === 'pending'): ?>
@@ -312,6 +327,36 @@ if ($reviewId) {
           <span style="color:var(--ink-700); font-weight:600;"><?= $agreedCount ?>/<?= $totalClauses ?> (<?= count($counterOffers) ?> Counter-Offer<?= count($counterOffers) > 1 ? 's' : '' ?>)</span>
         <?php endif; ?>
       </p>
+    </div>
+
+    <?php
+    $tenantDocLabels = [
+        'valid_id_path'        => ['label' => 'Valid Government ID',         'icon' => 'bi-person-badge'],
+        'sec_dti_path'         => ['label' => 'SEC / DTI Registration',      'icon' => 'bi-file-earmark-ruled'],
+        'business_permit_path' => ['label' => "Mayor's / Business Permit",  'icon' => 'bi-file-earmark-check'],
+        'bir_cert_path'        => ['label' => 'BIR Certificate / Registration', 'icon' => 'bi-file-earmark-text'],
+    ];
+    ?>
+    <div class="card" style="margin-bottom:16px;">
+      <p style="margin:0 0 10px; font-size:12.5px; font-weight:700; color:var(--ink-900);">
+        <i class="bi bi-folder2-open" style="color:var(--primary); margin-right:4px;"></i> Tenant Verification Documents
+      </p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <?php foreach ($tenantDocLabels as $key => $info): $path = $reviewing[$key] ?? null; ?>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg);">
+            <span style="font-size:12px; font-weight:500; color:var(--ink-800); display:flex; align-items:center; gap:6px;">
+              <i class="bi <?= $info['icon'] ?>" style="color:var(--ink-500);"></i> <?= $info['label'] ?>
+            </span>
+            <?php if (!empty($path)): ?>
+              <a href="/<?= htmlspecialchars($path) ?>" target="_blank" class="btn btn-primary" style="padding:4px 10px; font-size:11.5px; display:inline-flex; align-items:center; gap:4px; text-decoration:none;">
+                <i class="bi bi-box-arrow-up-right"></i> View
+              </a>
+            <?php else: ?>
+              <span style="font-size:11px; color:var(--ink-400); font-style:italic;">Not uploaded</span>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
     </div>
 
     <?php if (!empty($conversation)): ?>

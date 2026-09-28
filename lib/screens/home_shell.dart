@@ -18,6 +18,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
+  int _applicantAppsTick = 0;
   late Future<Map<String, dynamic>?> _leaseFuture;
 
   @override
@@ -83,6 +84,7 @@ class _HomeShellState extends State<HomeShell> {
             : [
                 BrowseScreen(onLeaseMayHaveChanged: _recheckLease),
                 MyApplicationsScreen(
+                  key: ValueKey('apps_tab_$_applicantAppsTick'),
                   onLeaseMayHaveChanged: _recheckLease,
                   isTab: true,
                 ),
@@ -255,7 +257,14 @@ class _HomeShellState extends State<HomeShell> {
     final isSelected = currentIndex == targetIndex;
 
     return InkWell(
-      onTap: () => setState(() => _currentIndex = targetIndex),
+      onTap: () {
+        setState(() {
+          _currentIndex = targetIndex;
+          if (targetIndex == 1) {
+            _applicantAppsTick++;
+          }
+        });
+      },
       borderRadius: BorderRadius.circular(20),
       child: SizedBox(
         width: 66,

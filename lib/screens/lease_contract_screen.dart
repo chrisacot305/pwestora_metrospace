@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme.dart';
@@ -67,8 +68,8 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
       'key': 'no_sublease',
       'label': 'Assignment & Subleasing Policy',
       'standard': "The tenant shall not sublease, assign, transfer, or encumber the leasehold without prior express written authorization from the lessor.",
-      'agreed': false,
-      'note': 'Requesting permission to allow booth and kiosk consignment partner.',
+      'agreed': true,
+      'note': '',
     },
     {
       'key': 'termination_notice',
@@ -85,6 +86,66 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
       'note': '',
     },
   ];
+
+  List<Map<String, dynamic>> _getEffectiveClauses() {
+    dynamic rawNegotiation = widget.applicationData?['checklist_negotiation'] ?? _contract?['checklist_negotiation'];
+
+    Map<String, dynamic> negMap = {};
+    if (rawNegotiation is Map) {
+      negMap = Map<String, dynamic>.from(rawNegotiation);
+    } else if (rawNegotiation is String && rawNegotiation.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawNegotiation);
+        if (decoded is Map) {
+          negMap = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
+    final List<Map<String, dynamic>> result = [];
+    for (final base in _defaultClauses) {
+      final key = base['key'] as String;
+
+      // Check multiple possible key aliases
+      dynamic clauseData;
+      if (negMap.containsKey(key)) {
+        clauseData = negMap[key];
+      } else if (key == 'maintenance_responsibility' && negMap.containsKey('maintenance')) {
+        clauseData = negMap['maintenance'];
+      } else if (key == 'no_sublease' && negMap.containsKey('subleasing')) {
+        clauseData = negMap['subleasing'];
+      } else if (key == 'compliance' && negMap.containsKey('insurance_compliance')) {
+        clauseData = negMap['insurance_compliance'];
+      } else if (key == 'compliance' && negMap.containsKey('insurance')) {
+        clauseData = negMap['insurance'];
+      }
+
+      bool isAgreed = true;
+      String note = '';
+
+      if (clauseData is Map) {
+        if (clauseData.containsKey('agreed')) {
+          isAgreed = clauseData['agreed'] == true;
+        }
+        note = (clauseData['rebuttal_note'] ?? clauseData['note'] ?? '').toString();
+      } else if (clauseData is bool) {
+        isAgreed = clauseData;
+      } else if (negMap.isEmpty) {
+        isAgreed = base['agreed'] == true;
+        note = (base['note'] ?? '').toString();
+      }
+
+      result.add({
+        'key': key,
+        'label': base['label'],
+        'standard': base['standard'],
+        'agreed': isAgreed,
+        'note': note,
+      });
+    }
+
+    return result;
+  }
 
   @override
   void initState() {
@@ -426,161 +487,171 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
           const SizedBox(height: 20),
 
           // Informative Section Label
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Clause-by-Clause Negotiation',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink900, letterSpacing: -0.2),
-              ),
-              Text(
-                '${_defaultClauses.length} Clauses',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // List of Clauses with interactive notes
-          ...List.generate(_defaultClauses.length, (index) {
-            final clause = _defaultClauses[index];
-            final isAgreed = clause['agreed'] == true;
-            final note = clause['note']?.toString() ?? '';
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isAgreed ? AppColors.border : const Color(0xFFF59E0B).withValues(alpha: 0.6),
-                  width: isAgreed ? 1 : 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
+          Builder(
+            builder: (context) {
+              final clauses = _getEffectiveClauses();
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          isAgreed ? Icons.check_rounded : Icons.edit_note_rounded,
-                          size: 16,
-                          color: isAgreed ? AppColors.success : const Color(0xFFD97706),
-                        ),
+                      const Text(
+                        'Clause-by-Clause Negotiation',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink900, letterSpacing: -0.2),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              clause['label'] ?? '',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink900),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              isAgreed ? 'Standard Philippine Commercial Practice' : 'Digital Rebuttal & Custom Term Attached',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isAgreed ? AppColors.ink500 : const Color(0xFFD97706),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          isAgreed ? 'AGREED' : 'COUNTER-OFFER',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.3,
-                            color: isAgreed ? AppColors.success : const Color(0xFFB45309),
-                          ),
-                        ),
+                      Text(
+                        '${clauses.length} Clauses',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink500),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    clause['standard'] ?? '',
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.ink700, height: 1.4),
-                  ),
+                  const SizedBox(height: 12),
 
-                  // Counter-offer / Rebuttal Note Box (if unchecked)
-                  if (!isAgreed && note.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
+                  // List of Clauses with interactive notes
+                  ...List.generate(clauses.length, (index) {
+                    final clause = clauses[index];
+                    final isAgreed = clause['agreed'] == true;
+                    final note = clause['note']?.toString() ?? '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFDE68A)),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isAgreed ? AppColors.border : const Color(0xFFF59E0B).withValues(alpha: 0.6),
+                          width: isAgreed ? 1 : 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.speaker_notes_outlined, size: 13, color: Color(0xFFB45309)),
-                              SizedBox(width: 5),
-                              Text(
-                                'Lessee Counter-Offer Rebuttal:',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isAgreed ? Icons.check_rounded : Icons.edit_note_rounded,
+                                  size: 16,
+                                  color: isAgreed ? AppColors.success : const Color(0xFFD97706),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      clause['label'] ?? '',
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isAgreed ? 'Standard Philippine Commercial Practice' : 'Digital Rebuttal & Custom Term Attached',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAgreed ? AppColors.ink500 : const Color(0xFFD97706),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isAgreed ? 'AGREED' : 'COUNTER-OFFER',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.3,
+                                    color: isAgreed ? AppColors.success : const Color(0xFFB45309),
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 10),
                           Text(
-                            '"$note"',
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontStyle: FontStyle.italic,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.ink900,
-                            ),
+                            clause['standard'] ?? '',
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.ink700, height: 1.4),
                           ),
-                          const SizedBox(height: 6),
-                          const Row(
-                            children: [
-                              Icon(Icons.check_circle_outline, size: 12, color: Color(0xFF059669)),
-                              SizedBox(width: 4),
-                              Text(
-                                'Reviewed & pre-accepted by Lessor during approval',
-                                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF059669)),
+
+                          // Counter-offer / Rebuttal Note Box (if unchecked)
+                          if (!isAgreed && note.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFFDE68A)),
                               ),
-                            ],
-                          ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.speaker_notes_outlined, size: 13, color: Color(0xFFB45309)),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        'Lessee Counter-Offer Rebuttal:',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '"$note"',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontStyle: FontStyle.italic,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.ink900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_outline, size: 12, color: Color(0xFF059669)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Reviewed & pre-accepted by Lessor during approval',
+                                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF059669)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                    ),
-                  ],
+                    );
+                  }),
                 ],
-              ),
-            );
-          }),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -883,29 +954,32 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
                 ),
                 const SizedBox(height: 8),
 
-                ...List.generate(_defaultClauses.length, (i) {
-                  final c = _defaultClauses[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${i + 1}. ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                        Expanded(
-                          child: RichText(
-                            text: TextSpan(
-                              style: const TextStyle(fontSize: 12, color: AppColors.ink700, height: 1.4, fontFamily: 'Roboto'),
-                              children: [
-                                TextSpan(text: '${c['label']}: ', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink900)),
-                                TextSpan(text: c['agreed'] == true ? c['standard'] : '${c['standard']} (Custom Term: ${c['note']})'),
-                              ],
+                ...() {
+                  final clauses = _getEffectiveClauses();
+                  return List.generate(clauses.length, (i) {
+                    final c = clauses[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${i + 1}. ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(fontSize: 12, color: AppColors.ink700, height: 1.4, fontFamily: 'Roboto'),
+                                children: [
+                                  TextSpan(text: '${c['label']}: ', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink900)),
+                                  TextSpan(text: c['agreed'] == true ? c['standard'] : '${c['standard']} (Custom Term: ${c['note']})'),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                        ],
+                      ),
+                    );
+                  });
+                }(),
 
                 const SizedBox(height: 24),
                 const Divider(color: AppColors.borderLight),

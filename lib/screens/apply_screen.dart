@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'lease_contract_screen.dart';
 
+class _UploadedDoc {
+  final Uint8List bytes;
+  final String filename;
+  final String path;
+  _UploadedDoc({required this.bytes, required this.filename, required this.path});
+}
+
 class ApplyScreen extends StatefulWidget {
   final int propertyId;
   final String propertyName;
-  const ApplyScreen({super.key, required this.propertyId, required this.propertyName});
+  final double? askingRent;
+
+  const ApplyScreen({
+    super.key,
+    required this.propertyId,
+    required this.propertyName,
+    this.askingRent,
+  });
 
   @override
   State<ApplyScreen> createState() => _ApplyScreenState();
@@ -16,13 +31,66 @@ class ApplyScreen extends StatefulWidget {
 class _ApplyScreenState extends State<ApplyScreen> {
   final _formKey = GlobalKey<FormState>();
   final _businessCtrl = TextEditingController();
-  final _termCtrl = TextEditingController(text: '12');
-  final _rentCtrl = TextEditingController();
-  int _currentStep = 0; // 0: Proposal Info, 1: Interactive Contract Negotiation Checklist
+  final _customRentCtrl = TextEditingController();
+  
+  // Step State
+  int _currentStep = 0; // 0: Commercial Proposal, 1: Verification Documents, 2: Interactive Contract Negotiation Checklist
+
+  // Step 1: Proposal State
+  String _selectedCategory = 'Food & Beverage';
+  int _selectedTerm = 12; // months (6, 12, 24, 36)
+  DateTime _targetMoveInDate = DateTime.now().add(const Duration(days: 14));
+  bool _requestFitOutGrace = true;
+  bool _customRateMode = false;
+  double _effectiveRent = 0.0;
 
   bool _loading = false;
   String? _error;
   bool _submitted = false;
+  Map<String, dynamic>? _submittedNegotiationPayload;
+
+  // Uploaded documents storage (key -> doc)
+  final Map<String, _UploadedDoc> _uploadedDocs = {};
+
+  final List<Map<String, dynamic>> _businessCategories = [
+    {'label': 'Food & Beverage', 'icon': Icons.restaurant_rounded},
+    {'label': 'Retail & Fashion', 'icon': Icons.shopping_bag_outlined},
+    {'label': 'Services & Care', 'icon': Icons.content_cut_rounded},
+    {'label': 'General / Other', 'icon': Icons.storefront_outlined},
+  ];
+
+  final List<int> _termOptions = [6, 12, 24, 36];
+
+  final List<Map<String, dynamic>> _docFields = [
+    {
+      'key': 'valid_id',
+      'title': 'Valid Government ID',
+      'subtitle': "Owner / Authorized Signatory's Passport, Driver's License, UMID, PRC, etc.",
+      'icon': Icons.badge_outlined,
+      'recommended': true,
+    },
+    {
+      'key': 'sec_dti',
+      'title': 'DTI / SEC Registration',
+      'subtitle': 'Certificate of Business Name or SEC Registration Certificate.',
+      'icon': Icons.assignment_outlined,
+      'recommended': true,
+    },
+    {
+      'key': 'business_permit',
+      'title': "Mayor's / Business Permit",
+      'subtitle': 'Current City / Municipal Business Permit or application official receipt.',
+      'icon': Icons.verified_outlined,
+      'recommended': false,
+    },
+    {
+      'key': 'bir_cert',
+      'title': 'BIR Registration (Form 2303)',
+      'subtitle': 'Certificate of Registration issued by the Bureau of Internal Revenue.',
+      'icon': Icons.receipt_long_outlined,
+      'recommended': false,
+    },
+  ];
 
   // Standard Commercial Lease Clauses
   final List<Map<String, dynamic>> _checklistClauses = [
@@ -93,20 +161,155 @@ class _ApplyScreenState extends State<ApplyScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _effectiveRent = (widget.askingRent != null && widget.askingRent! > 0)
+        ? widget.askingRent!
+        : 35000.0;
+    _customRentCtrl.text = _effectiveRent.toStringAsFixed(0);
+  }
+
+  @override
   void dispose() {
     _businessCtrl.dispose();
-    _termCtrl.dispose();
-    _rentCtrl.dispose();
+    _customRentCtrl.dispose();
     for (final c in _checklistClauses) {
       (c['controller'] as TextEditingController).dispose();
     }
     super.dispose();
   }
 
-  void _proceedToChecklist() {
+  void _proceedToDocuments() {
     if (!_formKey.currentState!.validate()) return;
+    if (_customRateMode) {
+      final parsed = double.tryParse(_customRentCtrl.text.trim());
+      if (parsed == null || parsed <= 0) {
+        setState(() => _error = 'Please enter a valid monthly rent amount');
+        return;
+      }
+      _effectiveRent = parsed;
+    }
     HapticFeedback.lightImpact();
-    setState(() => _currentStep = 1);
+    setState(() {
+      _error = null;
+      _currentStep = 1;
+    });
+  }
+
+  void _proceedToChecklist() {
+    HapticFeedback.lightImpact();
+    setState(() => _currentStep = 2);
+  }
+
+  Future<void> _selectTargetDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _targetMoveInDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              onSurface: AppColors.ink900,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _targetMoveInDate = picked);
+    }
+  }
+
+  Future<void> _pickDocument(String key, ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _uploadedDocs[key] = _UploadedDoc(
+          bytes: bytes,
+          filename: picked.name.isNotEmpty ? picked.name : '$key.jpg',
+          path: picked.path,
+        );
+      });
+      HapticFeedback.selectionClick();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not attach image: $e')),
+      );
+    }
+  }
+
+  void _showPickOptions(String key, String title) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Attach $title',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink900),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Upload a clear photo or scanned image of your document.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.ink500),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.camera_alt_outlined, color: AppColors.electricBlue),
+                ),
+                title: const Text('Take Photo with Camera', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickDocument(key, ImageSource.camera);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.photo_library_outlined, color: AppColors.electricBlue),
+                ),
+                title: const Text('Choose from Photo Gallery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickDocument(key, ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -128,15 +331,34 @@ class _ApplyScreenState extends State<ApplyScreen> {
         };
       }
 
+      // Append metadata to negotiation payload for lessor context
+      negotiationPayload['_proposal_meta'] = {
+        'category': _selectedCategory,
+        'target_move_in': _targetMoveInDate.toIso8601String().split('T').first,
+        'fitout_grace_requested': _requestFitOutGrace,
+      };
+
+      final Map<String, Map<String, dynamic>> docPayload = {};
+      for (final entry in _uploadedDocs.entries) {
+        docPayload[entry.key] = {
+          'bytes': entry.value.bytes,
+          'filename': entry.value.filename,
+        };
+      }
+
+      final fullBusinessName = '${_businessCtrl.text.trim()} ($_selectedCategory)';
+
       await ApiService.submitApplication(
         propertyId: widget.propertyId,
-        businessName: _businessCtrl.text.trim(),
-        termMonths: int.parse(_termCtrl.text.trim()),
-        rent: double.parse(_rentCtrl.text.trim()),
+        businessName: fullBusinessName,
+        termMonths: _selectedTerm,
+        rent: _effectiveRent,
         checklistNegotiation: negotiationPayload,
+        documents: docPayload.isNotEmpty ? docPayload : null,
       );
 
       if (!mounted) return;
+      _submittedNegotiationPayload = negotiationPayload;
       HapticFeedback.mediumImpact();
       setState(() => _submitted = true);
     } catch (e) {
@@ -152,15 +374,21 @@ class _ApplyScreenState extends State<ApplyScreen> {
       return _buildSuccessScreen();
     }
 
+    String appBarTitle = 'Commercial Proposal';
+    if (_currentStep == 1) appBarTitle = 'Verification Documents';
+    if (_currentStep == 2) appBarTitle = 'Negotiate Contract Terms';
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: Text(_currentStep == 0 ? 'Lease Proposal' : 'Negotiate Contract Terms'),
+        title: Text(appBarTitle),
         backgroundColor: AppColors.surface,
         elevation: 0,
         leading: AppBackButton(
           onPressed: () {
-            if (_currentStep == 1) {
+            if (_currentStep == 2) {
+              setState(() => _currentStep = 1);
+            } else if (_currentStep == 1) {
               setState(() => _currentStep = 0);
             } else {
               Navigator.of(context).pop();
@@ -172,68 +400,297 @@ class _ApplyScreenState extends State<ApplyScreen> {
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.all(20),
-          child: _currentStep == 0 ? _buildStepOneForm() : _buildStepTwoChecklist(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Step Timeline Header (1 ─── 2 ─── 3)
+              _buildTimelineStepper(),
+              const SizedBox(height: 20),
+
+              if (_currentStep == 0)
+                _buildStepOneForm()
+              else if (_currentStep == 1)
+                _buildStepTwoDocuments()
+              else
+                _buildStepThreeChecklist(),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // Connected Timeline Stepper (1 ─── 2 ─── 3)
+  Widget _buildTimelineStepper() {
+    final steps = [
+      {'num': 1, 'label': 'Proposal'},
+      {'num': 2, 'label': 'Documents'},
+      {'num': 3, 'label': 'Checklist'},
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: List.generate(steps.length * 2 - 1, (index) {
+          if (index.isOdd) {
+            // Connecting branch line
+            final stepIdx = index ~/ 2;
+            final isLineActive = _currentStep > stepIdx;
+            return Expanded(
+              child: Container(
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isLineActive ? AppColors.electricBlue : AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }
+
+          // Step node
+          final stepIdx = index ~/ 2;
+          final stepData = steps[stepIdx];
+          final isActive = _currentStep == stepIdx;
+          final isDone = _currentStep > stepIdx;
+
+          return GestureDetector(
+            onTap: isDone ? () => setState(() => _currentStep = stepIdx) : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: isDone
+                        ? AppColors.electricBlue
+                        : isActive
+                            ? AppColors.primary
+                            : AppColors.borderLight,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isActive ? AppColors.electricBlue : Colors.transparent,
+                      width: 2,
+                    ),
+                    boxShadow: (isActive || isDone)
+                        ? [
+                            BoxShadow(
+                              color: AppColors.electricBlue.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: isDone
+                        ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                        : Text(
+                            '${stepData['num']}',
+                            style: TextStyle(
+                              color: isActive ? Colors.white : AppColors.ink500,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  stepData['label'] as String,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: (isActive || isDone) ? FontWeight.w800 : FontWeight.w600,
+                    color: (isActive || isDone) ? AppColors.ink900 : AppColors.ink400,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildStepOneForm() {
+    final formattedDate =
+        '${_targetMoveInDate.month}/${_targetMoveInDate.day}/${_targetMoveInDate.year}';
+
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Step Progress Indicator
-          _buildStepHeader(step: 1, title: 'Commercial Proposal', subtitle: 'Step 1 of 2: Concept & Base Rates'),
-          const SizedBox(height: 16),
-
-          // Property Summary Pill Card
+          // 1. Property & Fixed Rate Hero Card
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: AppDecorations.card(radius: 18, shadow: true),
-            child: Row(
+            padding: const EdgeInsets.all(18),
+            decoration: AppDecorations.card(radius: 20, shadow: true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryLight],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.primaryLight],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 22),
                     ),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: const Icon(Icons.apartment, color: Colors.white, size: 22),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'APPLYING FOR SPACE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.electricBlue,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.propertyName,
+                            style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
+                const SizedBox(height: 16),
+
+                // Base Monthly Rent Card (Fixed Rate with counter-offer toggle)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'APPLYING FOR SPACE',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.ink500, letterSpacing: 0.5),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Monthly Base Rent',
+                                style: TextStyle(fontSize: 11.5, color: AppColors.ink500, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '₱${_effectiveRent.toStringAsFixed(0)} / mo',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.ink900,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentSoft,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified_rounded, size: 13, color: AppColors.electricBlue),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Fixed Listed Rate',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.electricBlue),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.propertyName,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink900),
-                      ),
+                      if (_customRateMode) ...[
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _customRentCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            labelText: 'Propose Counter-Offer Rate (₱ PHP)',
+                            prefixText: '₱ ',
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.check_circle, color: AppColors.electricBlue, size: 20),
+                              onPressed: () {
+                                final parsed = double.tryParse(_customRentCtrl.text.trim());
+                                if (parsed != null && parsed > 0) {
+                                  setState(() {
+                                    _effectiveRent = parsed;
+                                    _customRateMode = false;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _customRateMode = !_customRateMode);
+                    },
+                    child: Text(
+                      _customRateMode ? 'Cancel custom rate' : 'Propose counter-offer rate / discount',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.electricBlue,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           if (_error != null) ...[
             _buildErrorBox(_error!),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
           ],
 
+          // 2. Business Concept & Category Card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: AppDecorations.card(radius: 20, shadow: true),
@@ -241,7 +698,62 @@ class _ApplyScreenState extends State<ApplyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Business Concept / Brand Name',
+                  'Business Concept Category',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Helps the lessor prevent tenant conflict and verify stall suitability.',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                ),
+                const SizedBox(height: 12),
+
+                // Category Chips
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _businessCategories.map((cat) {
+                    final label = cat['label'] as String;
+                    final icon = cat['icon'] as IconData;
+                    final isSelected = _selectedCategory == label;
+
+                    return ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            icon,
+                            size: 15,
+                            color: isSelected ? AppColors.electricBlue : AppColors.ink500,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(label),
+                        ],
+                      ),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedCategory = label);
+                      },
+                      selectedColor: AppColors.accentSoft,
+                      backgroundColor: AppColors.bg,
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? AppColors.electricBlue : AppColors.ink700,
+                      ),
+                      side: BorderSide(
+                        color: isSelected ? AppColors.electricBlue : AppColors.border,
+                        width: isSelected ? 1.4 : 1,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      showCheckmark: false,
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Brand / Store Name',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
                 ),
                 const SizedBox(height: 6),
@@ -249,92 +761,490 @@ class _ApplyScreenState extends State<ApplyScreen> {
                   controller: _businessCtrl,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                    hintText: 'e.g. Artisanal Cafe & Specialty Bakery',
-                    prefixIcon: Icon(Icons.store_mall_directory_outlined, color: AppColors.ink500, size: 20),
+                    hintText: 'e.g. Daily Grind Cafe & Bakes',
+                    prefixIcon: Icon(Icons.storefront_outlined, color: AppColors.ink500, size: 20),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter your business name' : null,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter your brand or business name' : null,
                 ),
-                const SizedBox(height: 18),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
 
+          // 3. Lease Duration & Target Move-In Date Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: AppDecorations.card(radius: 20, shadow: true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const Text(
-                  'Proposed Lease Term (months)',
+                  'Proposed Lease Duration (Term)',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Multi-year lease commitments are favored by commercial space lessors.',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                ),
+                const SizedBox(height: 12),
+
+                // Term Pills
+                Row(
+                  children: _termOptions.map((term) {
+                    final isSelected = _selectedTerm == term;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: InkWell(
+                          onTap: () => setState(() => _selectedTerm = term),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.accentSoft : AppColors.bg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? AppColors.electricBlue : AppColors.border,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '$term Mos',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSelected ? AppColors.electricBlue : AppColors.ink700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+
+                // Target Move-in Date Tile
+                const Text(
+                  'Target Move-In / Turnover Date',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
                 ),
                 const SizedBox(height: 6),
-                TextFormField(
-                  controller: _termCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. 12, 24, 36',
-                    prefixIcon: Icon(Icons.date_range_outlined, color: AppColors.ink500, size: 20),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Enter a lease term';
-                    final n = int.tryParse(v);
-                    if (n == null || n <= 0) return 'Enter a valid number of months';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 18),
-
-                const Text(
-                  'Proposed Monthly Rent (₱ PHP)',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: _rentCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. 35000',
-                    prefixIcon: Icon(Icons.payments_outlined, color: AppColors.ink500, size: 20),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Enter a proposed rent amount';
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) return 'Enter a valid amount';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 26),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _proceedToChecklist,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: AppColors.primary,
+                InkWell(
+                  onTap: _selectTargetDate,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.bg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Row(
                       children: [
-                        Text('Continue to Contract Checklist', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_rounded, size: 18),
+                        const Icon(Icons.calendar_today_rounded, size: 18, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Planned Occupancy', style: TextStyle(fontSize: 10.5, color: AppColors.ink500)),
+                              Text(formattedDate, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900)),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.ink400),
                       ],
                     ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Fit-out Grace Period Request Checkbox
+                InkWell(
+                  onTap: () => setState(() => _requestFitOutGrace = !_requestFitOutGrace),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _requestFitOutGrace ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                        size: 20,
+                        color: _requestFitOutGrace ? AppColors.electricBlue : AppColors.ink400,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Request 15-day rent-free fit-out / setup period before opening',
+                          style: TextStyle(fontSize: 12, color: AppColors.ink700, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 24),
+
+          // Continue Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _proceedToDocuments,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Continue to Verification Docs', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildStepTwoChecklist() {
+  Widget _buildStepTwoDocuments() {
+    final attachedCount = _uploadedDocs.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Clean Info Banner
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.shield_outlined, size: 20, color: AppColors.electricBlue),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Lessor Screening & Verification',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Attaching verification documents speeds up review.',
+                          style: TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: attachedCount > 0 ? AppColors.accentSoft : AppColors.borderLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          attachedCount > 0 ? Icons.check_circle : Icons.attach_file_rounded,
+                          size: 13,
+                          color: attachedCount > 0 ? AppColors.electricBlue : AppColors.ink500,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '$attachedCount of ${_docFields.length} Attached',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: attachedCount > 0 ? AppColors.electricBlue : AppColors.ink700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        if (_error != null) ...[
+          _buildErrorBox(_error!),
+          const SizedBox(height: 18),
+        ],
+
+        // Document Cards
+        ..._docFields.map((field) {
+          final key = field['key'] as String;
+          final title = field['title'] as String;
+          final subtitle = field['subtitle'] as String;
+          final icon = field['icon'] as IconData;
+          final isRecommended = field['recommended'] as bool;
+          final doc = _uploadedDocs[key];
+          final isUploaded = doc != null;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isUploaded ? AppColors.electricBlue.withValues(alpha: 0.6) : AppColors.border,
+                width: isUploaded ? 1.5 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isUploaded
+                      ? AppColors.electricBlue.withValues(alpha: 0.08)
+                      : AppColors.primary.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isUploaded ? AppColors.accentSoft : AppColors.borderLight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isUploaded ? Icons.check_circle_rounded : icon,
+                        color: isUploaded ? AppColors.electricBlue : AppColors.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                                ),
+                              ),
+                              if (isUploaded)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_rounded, color: AppColors.electricBlue, size: 12),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Attached',
+                                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.electricBlue),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else if (isRecommended)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'Recommended',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.35),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                if (isUploaded) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.bg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            doc.bytes,
+                            width: 42,
+                            height: 42,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                doc.filename,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink900),
+                              ),
+                              const SizedBox(height: 2),
+                              const Row(
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: AppColors.electricBlue, size: 12),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Ready to submit',
+                                    style: TextStyle(fontSize: 10.5, color: AppColors.electricBlue, fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _showPickOptions(key, title),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: const Text('Replace', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.electricBlue)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: AppColors.ink500, size: 18),
+                          tooltip: 'Remove',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            setState(() => _uploadedDocs.remove(key));
+                            HapticFeedback.lightImpact();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showPickOptions(key, title),
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                      label: Text('Attach $title', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: AppColors.bg,
+                        side: const BorderSide(color: AppColors.border),
+                        foregroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+
+        const SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _proceedToChecklist,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Continue to Contract Checklist', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                SizedBox(width: 8),
+                Icon(Icons.arrow_forward_rounded, size: 18),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Center(
+          child: Text(
+            'You can proceed and attach missing documents later if needed.',
+            style: TextStyle(fontSize: 11.5, color: AppColors.ink400),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildStepThreeChecklist() {
     final agreedCount = _checklistClauses.where((c) => c['agreed'] == true).length;
     final rebuttalCount = _checklistClauses.length - agreedCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Step Progress Indicator
-        _buildStepHeader(step: 2, title: 'Contract Negotiation Checklist', subtitle: 'Step 2 of 2: Agree to standard clauses or propose counter-offers'),
-        const SizedBox(height: 16),
-
         // Interactive Info Banner
         Container(
           padding: const EdgeInsets.all(16),
@@ -450,9 +1360,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
                             width: 1.8,
                           ),
                         ),
-                        child: isAgreed
-                            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-                            : null,
+                        child: isAgreed ? const Icon(Icons.check, color: Colors.white, size: 17) : null,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -460,14 +1368,35 @@ class _ApplyScreenState extends State<ApplyScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            clause['label'] as String,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  clause['label'] as String,
+                                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isAgreed ? 'Standard' : 'Counter-Offer',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: isAgreed ? AppColors.success : const Color(0xFFB45309),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 6),
                           Text(
                             clause['standard'] as String,
-                            style: const TextStyle(fontSize: 12, color: AppColors.ink700, height: 1.35),
+                            style: const TextStyle(fontSize: 12, color: AppColors.ink500, height: 1.4),
                           ),
                         ],
                       ),
@@ -475,14 +1404,14 @@ class _ApplyScreenState extends State<ApplyScreen> {
                   ],
                 ),
 
-                // Expanded Counter-Offer Rebuttal Box when unchecked
+                // Rebuttal/Counter-proposal text input when unchecked
                 if (!isAgreed) ...[
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFFBEB),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFFDE68A)),
                     ),
                     child: Column(
@@ -493,26 +1422,35 @@ class _ApplyScreenState extends State<ApplyScreen> {
                             Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFFB45309)),
                             SizedBox(width: 6),
                             Text(
-                              'Counter-Offer / Custom Proposal Note',
-                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                              'Propose Your Counter-Terms / Custom Request:',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF92400E)),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        TextField(
+                        const SizedBox(height: 8),
+                        TextFormField(
                           controller: ctrl,
-                          minLines: 2,
-                          maxLines: 4,
-                          style: const TextStyle(fontSize: 13, color: AppColors.ink900),
+                          maxLines: 2,
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.ink900),
                           decoration: InputDecoration(
-                            hintText: clause['defaultCounterPlaceholder'] as String,
-                            hintStyle: TextStyle(fontSize: 12, color: AppColors.ink500.withValues(alpha: 0.7)),
-                            filled: true,
+                            isDense: true,
+                            hintText: clause['defaultCounterPlaceholder'] as String? ?? 'Specify your requested terms...',
+                            hintStyle: const TextStyle(fontSize: 12, color: AppColors.ink500),
                             fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.all(10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFFDE68A))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFFDE68A))),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFD97706), width: 1.5)),
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFFCD34D)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFFCD34D)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                           ),
                         ),
                       ],
@@ -524,9 +1462,31 @@ class _ApplyScreenState extends State<ApplyScreen> {
           );
         }),
 
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
-        // Submit Button
+        // Summary of attached docs before final submission
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.attach_file_rounded, size: 18, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${_uploadedDocs.length} verification document(s) will be submitted with this application.',
+                  style: const TextStyle(fontSize: 12, color: AppColors.ink700, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -534,51 +1494,25 @@ class _ApplyScreenState extends State<ApplyScreen> {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
                 : const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Submit Proposal & Negotiated Terms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                      SizedBox(width: 8),
                       Icon(Icons.send_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Submit Application & Checklist', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ],
                   ),
           ),
         ),
         const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildStepHeader({required int step, required String title, required String subtitle}) {
-    return Row(
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              '$step',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink900)),
-              Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.ink500)),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -633,7 +1567,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Your commercial lease proposal and negotiated checklist terms for ${widget.propertyName} have been submitted to the lessor.',
+              'Your commercial lease proposal, verification documents, and negotiated terms for ${widget.propertyName} have been submitted to the lessor.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13.5, color: AppColors.ink500, height: 1.45),
             ),
@@ -668,9 +1602,10 @@ class _ApplyScreenState extends State<ApplyScreen> {
                       builder: (_) => LeaseContractScreen(
                         applicationData: {
                           'property_name': widget.propertyName,
-                          'rent': double.tryParse(_rentCtrl.text.trim()) ?? 0,
-                          'term_months': int.tryParse(_termCtrl.text.trim()) ?? 12,
+                          'rent': _effectiveRent,
+                          'term_months': _selectedTerm,
                           'business_name': _businessCtrl.text.trim(),
+                          'checklist_negotiation': _submittedNegotiationPayload,
                         },
                         forceInitialLock: true,
                       ),
@@ -682,6 +1617,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ),

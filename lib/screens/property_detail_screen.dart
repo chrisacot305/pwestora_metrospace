@@ -70,6 +70,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
 
           final p = snapshot.data!;
           final photos = (p['photos'] as List<dynamic>? ?? []).cast<String>();
+          final rawRent = p['asking_rent'] ?? p['rent'];
+          final double? askingRent = rawRent != null ? double.tryParse(rawRent.toString()) : null;
 
           return Stack(
             children: [
@@ -225,47 +227,51 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
-                          // Lessor Profile Box
+                          // Verified Trust & Protection Banner (Clean & Platform-Protected)
                           Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: AppDecorations.card(radius: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.border.withValues(alpha: 0.9)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: AppDecorations.squircle(color: AppColors.primary),
-                                  child: const Icon(Icons.business, color: Colors.white, size: 24),
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.verified_user_rounded, color: AppColors.electricBlue, size: 22),
                                 ),
-                                const SizedBox(width: 14),
-                                Expanded(
+                                const SizedBox(width: 12),
+                                const Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        'LISTED BY',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.ink500,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
                                       Text(
-                                        p['lessor_name'] ?? 'Pwestora Verified Partner',
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
+                                        'Verified Commercial Space',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
                                           color: AppColors.ink900,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      const Text(
-                                        'Verified Landlord / Commercial Partner',
-                                        style: TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Legally binding digital contract & verified lessor accreditation',
+                                        style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.3),
                                       ),
                                     ],
                                   ),
@@ -273,7 +279,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 20),
 
                           // Space Features / Guarantee Grid
                           const Text(
@@ -331,7 +337,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                 ],
               ),
 
-              // Floating Bottom Action Bar
+              // Floating Bottom Action Bar with Fixed Price
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -350,7 +356,59 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                   ),
                   child: Row(
                     children: [
+                      // Price display on bottom left
                       Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'MONTHLY RENT',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink500,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            RichText(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: (askingRent != null && askingRent > 0)
+                                        ? '₱${_formatMoney(askingRent)}'
+                                        : '₱35,000',
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.primary,
+                                      letterSpacing: -0.3,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: '/mo',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.ink500,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Apply CTA button on bottom right
+                      Expanded(
+                        flex: 6,
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.of(context).push(
@@ -358,21 +416,22 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                                 builder: (_) => ApplyScreen(
                                   propertyId: p['id'] as int,
                                   propertyName: p['name'] ?? '',
+                                  askingRent: askingRent,
                                 ),
                               ),
                             );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('Apply for this Space', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                              SizedBox(width: 8),
-                              Icon(Icons.arrow_forward, size: 18),
+                              Text('Apply for Space', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+                              SizedBox(width: 6),
+                              Icon(Icons.arrow_forward_rounded, size: 16),
                             ],
                           ),
                         ),
@@ -427,5 +486,11 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _formatMoney(double amount) {
+    final whole = amount.toStringAsFixed(0);
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return whole.replaceAllMapped(reg, (Match m) => '${m[1]},');
   }
 }

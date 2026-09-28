@@ -40,7 +40,11 @@ CREATE TABLE `applications` (
   `submitted_at` datetime NOT NULL DEFAULT current_timestamp(),
   `checklist_negotiation` longtext DEFAULT NULL,
   `lessor_rebuttal` text DEFAULT NULL,
-  `rebuttal_at` datetime DEFAULT NULL
+  `rebuttal_at` datetime DEFAULT NULL,
+  `valid_id_path` varchar(255) DEFAULT NULL,
+  `sec_dti_path` varchar(255) DEFAULT NULL,
+  `business_permit_path` varchar(255) DEFAULT NULL,
+  `bir_cert_path` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
