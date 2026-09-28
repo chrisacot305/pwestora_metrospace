@@ -112,27 +112,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // If no messages yet, provide an initial friendly greeting and sample report thread
-    final displayMessages = _messages.isNotEmpty
-        ? _messages
-        : [
-            {
-              'sender': 'lessor',
-              'body': 'Hello Juan! Welcome to Pwestora. How can we help you today?',
-              'sent_at': '9:24 AM',
-            },
-            {
-              'sender': 'tenant',
-              'body': '🛠️ Maintenance Report (#SL-02481)\nCategory: Comfort Room • Water leakage\nDescription: Water is leaking from the toilet bowl and the floor is wet.\nStatus: Approved',
-              'sent_at': '9:25 AM',
-            },
-            {
-              'sender': 'lessor',
-              'body': 'We received your report. The plumber has been scheduled for Sep 24 at 10:00 AM.',
-              'sent_at': '9:28 AM',
-            },
-          ];
-
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FB),
       appBar: AppBar(
@@ -202,27 +181,29 @@ class _MessagesScreenState extends State<MessagesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Messages List
+            // Messages List / Empty State
             Expanded(
               child: _loading && _messages.isEmpty
                   ? const Center(child: CircularProgressIndicator(color: AppColors.electricBlue))
-                  : ListView.builder(
-                      controller: _scrollCtrl,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      itemCount: displayMessages.length,
-                      itemBuilder: (context, index) {
-                        final msg = displayMessages[index];
-                        final isMe = msg['sender'] == 'tenant';
-                        final body = msg['body'] ?? '';
-                        final isReport = _isReportMessage(body);
+                  : _messages.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            final msg = _messages[index];
+                            final isMe = msg['sender'] == 'tenant';
+                            final body = msg['body'] ?? '';
+                            final isReport = _isReportMessage(body);
 
-                        if (isReport) {
-                          return _buildSpecialReportBubble(body, isMe);
-                        }
+                            if (isReport) {
+                              return _buildSpecialReportBubble(body, isMe);
+                            }
 
-                        return _buildStandardMessageBubble(body, isMe);
-                      },
-                    ),
+                            return _buildStandardMessageBubble(body, isMe);
+                          },
+                        ),
             ),
 
             // Bottom Input Bar
@@ -286,6 +267,77 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.accentSoft,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 34,
+                color: AppColors.electricBlue,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Direct Management Chat',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink900,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'No messages yet. Send a direct inquiry or message below to start communicating with your lessor.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.ink500,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildQuickPromptChip('👋 Hello! Just checking in.'),
+                _buildQuickPromptChip('📄 Lease contract question'),
+                _buildQuickPromptChip('🔧 Maintenance assistance'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickPromptChip(String prompt) {
+    return ActionChip(
+      label: Text(prompt, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: Color(0xFFE2E8F0)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onPressed: () {
+        _msgCtrl.text = prompt;
+        _sendMessage();
+      },
     );
   }
 

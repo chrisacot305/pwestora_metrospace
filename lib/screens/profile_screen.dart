@@ -22,7 +22,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _name = 'Juan Dela Cruz';
+  String _name = '';
   Map<String, dynamic>? _leaseData;
   int _demoStrike = 0;
 

@@ -30,7 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<dynamic>> _propertiesFuture;
   late Future<List<dynamic>> _arrangementsFuture;
   late Future<List<Map<String, dynamic>>> _violationsFuture;
-  String _userName = 'Juan Dela Cruz';
+  String _userName = '';
   bool _gateChecked = false;
 
   @override
