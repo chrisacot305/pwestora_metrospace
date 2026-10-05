@@ -7,22 +7,20 @@ class ThemeService {
   static const String _prefKey = 'pwestora_theme_mode';
 
   static final ValueNotifier<ThemeMode> themeModeNotifier =
-      ValueNotifier<ThemeMode>(ThemeMode.system);
+      ValueNotifier<ThemeMode>(ThemeMode.light);
 
-  /// Initialize and load saved theme preference
+  /// Initialize and load saved theme preference (defaults to light mode)
   static Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedMode = prefs.getString(_prefKey);
       if (savedMode == 'dark') {
         themeModeNotifier.value = ThemeMode.dark;
-      } else if (savedMode == 'light') {
-        themeModeNotifier.value = ThemeMode.light;
       } else {
-        themeModeNotifier.value = ThemeMode.system;
+        themeModeNotifier.value = ThemeMode.light;
       }
     } catch (_) {
-      themeModeNotifier.value = ThemeMode.system;
+      themeModeNotifier.value = ThemeMode.light;
     }
   }
 
@@ -49,8 +47,6 @@ class ThemeService {
 
   /// Check whether the current effective appearance is dark
   static bool isDark(BuildContext context) {
-    if (themeModeNotifier.value == ThemeMode.dark) return true;
-    if (themeModeNotifier.value == ThemeMode.light) return false;
-    return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    return themeModeNotifier.value == ThemeMode.dark;
   }
 }

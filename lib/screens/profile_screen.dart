@@ -527,9 +527,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      themeMode == ThemeMode.system
-                          ? 'Auto (System sync)'
-                          : (isDarkModeActive ? 'On (Midnight Navy)' : 'Off (Light)'),
+                      isDarkModeActive ? 'On (Pitch Black)' : 'Off (Light)',
                       style: const TextStyle(
                         fontSize: 11.5,
                         color: AppColors.ink400,
