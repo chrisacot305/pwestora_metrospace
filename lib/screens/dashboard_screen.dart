@@ -135,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final currentMonthName = _getMonthName(now.month);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF070F1E) : const Color(0xFFF7F8FA),
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF7F8FA),
       body: RefreshIndicator(
         onRefresh: _refresh,
         color: AppColors.midnightNavy,
@@ -200,7 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             end: Alignment.bottomRight,
                           ),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF1E3A5F) : Colors.white,
+                            color: isDark ? const Color(0xFF262626) : Colors.white,
                             width: 2,
                           ),
                           boxShadow: [
@@ -384,9 +384,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+                    color: isDark ? const Color(0xFF121212) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
+                    border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
@@ -449,9 +449,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+                    color: isDark ? const Color(0xFF121212) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
+                    border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
@@ -521,7 +521,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               final ticket = t as Map<String, dynamic>;
                               return Column(
                                 children: [
-                                  Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
+                                  Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
                                   _buildTicketActivityRow(ticket, isDark: isDark),
                                 ],
                               );
@@ -544,7 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           return Column(
                             children: [
-                              Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
+                              Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
                               _buildActivityRow(
                                 isDark: isDark,
                                 icon: isApproved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
@@ -579,7 +579,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           return Column(
                             children: [
-                              Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
+                              Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
                               _buildActivityRow(
                                 isDark: isDark,
                                 icon: Icons.gavel_rounded,
@@ -634,9 +634,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF162544) : const Color(0xFFF3F4F6),
+                color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF3F4F6),
                 shape: BoxShape.circle,
-                border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
+                border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
               ),
               child: Center(
                 child: iconWidget ??
@@ -683,9 +683,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF162544) : const Color(0xFFF3F4F6),
+                color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(13),
-                border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 0.8) : null,
+                border: isDark ? Border.all(color: const Color(0xFF262626), width: 0.8) : null,
               ),
               child: Icon(icon, color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF111418), size: 20),
             ),

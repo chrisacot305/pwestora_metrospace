@@ -116,9 +116,9 @@ class _HomeShellState extends State<HomeShell> {
   /// Featuring a smooth scooped cradle with elevated Report button and Navy Blue active/hover states.
   Widget _buildTenantDock(Map<String, dynamic> lease, int currentIndex) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final scaffoldBg = isDark ? const Color(0xFF070F1E) : AppColors.bg;
-    final dockBg = isDark ? const Color(0xFF0D1B33) : Colors.white;
-    final dockBorder = isDark ? const Color(0xFF1E3A5F) : AppColors.border;
+    final scaffoldBg = isDark ? const Color(0xFF000000) : AppColors.bg;
+    final dockBg = isDark ? const Color(0xFF121212) : Colors.white;
+    final dockBorder = isDark ? const Color(0xFF262626) : AppColors.border;
     final dockShadow = isDark ? Colors.black : const Color(0xFF0A1832);
     final reportLabelColor = isDark ? Colors.white : const Color(0xFF0A1832);
 
@@ -294,9 +294,9 @@ class _HomeShellState extends State<HomeShell> {
   /// Bottom Dock for Prospective Tenants / Applicants: Browse, Applications, Me
   Widget _buildApplicantDock(int currentIndex) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final scaffoldBg = isDark ? const Color(0xFF070F1E) : AppColors.bg;
-    final dockBg = isDark ? const Color(0xFF0D1B33) : Colors.white;
-    final dockBorder = isDark ? const Color(0xFF1E3A5F) : AppColors.border;
+    final scaffoldBg = isDark ? const Color(0xFF000000) : AppColors.bg;
+    final dockBg = isDark ? const Color(0xFF121212) : Colors.white;
+    final dockBorder = isDark ? const Color(0xFF262626) : AppColors.border;
     final dockShadow = isDark ? Colors.black : const Color(0xFF0A1832);
 
     return SafeArea(

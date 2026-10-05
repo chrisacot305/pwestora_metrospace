@@ -257,9 +257,9 @@ ThemeData buildAppTheme() {
 }
 
 ThemeData buildDarkAppTheme() {
-  const darkBg = Color(0xFF070F1E);
-  const darkSurface = Color(0xFF0D1B33);
-  const darkBorder = Color(0xFF1E3A5F);
+  const darkBg = Color(0xFF000000);
+  const darkSurface = Color(0xFF121212);
+  const darkBorder = Color(0xFF262626);
 
   return ThemeData(
     useMaterial3: true,

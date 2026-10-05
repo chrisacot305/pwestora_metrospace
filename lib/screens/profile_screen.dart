@@ -116,7 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final leaseNumber = 'Lease #LS-2026-${(_leaseData?['tenant_id'] ?? '032').toString().padLeft(3, '0')}';
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF070F1E) : AppColors.bg,
+      backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -220,10 +220,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+                        color: isDark ? const Color(0xFF121212) : Colors.white,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: isDark ? const Color(0xFF1E3A5F) : AppColors.border.withValues(alpha: 0.85),
+                          color: isDark ? const Color(0xFF262626) : AppColors.border.withValues(alpha: 0.85),
                           width: 1,
                         ),
                       ),
@@ -420,10 +420,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+            color: isDark ? const Color(0xFF121212) : Colors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isDark ? const Color(0xFF1E3A5F) : AppColors.border.withValues(alpha: 0.85),
+              color: isDark ? const Color(0xFF262626) : AppColors.border.withValues(alpha: 0.85),
               width: 1,
             ),
             boxShadow: [
@@ -441,7 +441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   items[i],
                   if (i < items.length - 1)
                     Divider(
-                      color: isDark ? const Color(0xFF1E3A5F) : AppColors.border,
+                      color: isDark ? const Color(0xFF262626) : AppColors.border,
                       height: 1,
                       indent: 52,
                     ),
