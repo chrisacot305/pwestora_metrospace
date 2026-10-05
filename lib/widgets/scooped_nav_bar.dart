@@ -6,6 +6,7 @@ import '../theme.dart';
 class ScoopedCradlePainter extends CustomPainter {
   final Color color;
   final Color shadowColor;
+  final Color? borderColor;
   final double cornerRadius;
   final double cradleWidth;
   final double cradleDepth;
@@ -14,6 +15,7 @@ class ScoopedCradlePainter extends CustomPainter {
   ScoopedCradlePainter({
     this.color = Colors.white,
     this.shadowColor = const Color(0xFF0A1832),
+    this.borderColor,
     this.cornerRadius = 32.0,
     this.cradleWidth = 86.0,
     this.cradleDepth = 36.0,
@@ -93,9 +95,9 @@ class ScoopedCradlePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawPath(path, fillPaint);
 
-    // Subtle hairline border
+    // Hairline border
     final borderPaint = Paint()
-      ..color = AppColors.border.withValues(alpha: 0.75)
+      ..color = borderColor ?? AppColors.border.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     canvas.drawPath(path, borderPaint);
@@ -104,6 +106,8 @@ class ScoopedCradlePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant ScoopedCradlePainter oldDelegate) {
     return oldDelegate.color != color ||
+        oldDelegate.shadowColor != shadowColor ||
+        oldDelegate.borderColor != borderColor ||
         oldDelegate.cradleWidth != cradleWidth ||
         oldDelegate.cradleDepth != cradleDepth ||
         oldDelegate.barTop != barTop;
@@ -141,10 +145,13 @@ class _ScoopedNavItemState extends State<ScoopedNavItem> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = widget.currentIndex == widget.index;
     final isActiveOrHovered = isSelected || _isHovered;
 
-    final itemColor = isActiveOrHovered ? navyActive : AppColors.ink400;
+    final activeColor = isDark ? Colors.white : navyActive;
+    final inactiveColor = isDark ? const Color(0xFF94A3B8) : AppColors.ink400;
+    final itemColor = isActiveOrHovered ? activeColor : inactiveColor;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),

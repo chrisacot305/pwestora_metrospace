@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import '../services/theme_service.dart';
 import 'login_screen.dart';
 import 'lease_contract_screen.dart';
 import 'violation_notice_sheet.dart';
@@ -107,6 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasLease = _leaseData != null;
     final unit = hasLease
         ? (_leaseData?['unit_label'] ?? 'Unit 302 • 3rd Floor')
@@ -114,7 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final leaseNumber = 'Lease #LS-2026-${(_leaseData?['tenant_id'] ?? '032').toString().padLeft(3, '0')}';
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: isDark ? const Color(0xFF070F1E) : AppColors.bg,
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -163,10 +165,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Text(
                             _name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.ink900,
+                              color: isDark ? Colors.white : AppColors.ink900,
                               letterSpacing: -0.3,
                             ),
                           ),
@@ -179,14 +181,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: hasLease
                                 ? null
                                 : BoxDecoration(
-                                    color: AppColors.accentSoft,
+                                    color: isDark
+                                        ? const Color(0xFF1E3A8A).withValues(alpha: 0.3)
+                                        : AppColors.accentSoft,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                             child: Text(
                               unit,
                               style: TextStyle(
                                 fontSize: 12.5,
-                                color: hasLease ? AppColors.ink500 : AppColors.accent,
+                                color: hasLease
+                                    ? (isDark ? const Color(0xFF94A3B8) : AppColors.ink500)
+                                    : (isDark ? const Color(0xFF60A5FA) : AppColors.accent),
                                 fontWeight: hasLease ? FontWeight.w500 : FontWeight.w700,
                               ),
                             ),
@@ -213,34 +219,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                     child: Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: AppDecorations.card(radius: 18),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF1E3A5F) : AppColors.border.withValues(alpha: 0.85),
+                          width: 1,
+                        ),
+                      ),
                       child: Row(
                         children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Lease Information',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.ink900,
+                                    color: isDark ? Colors.white : AppColors.ink900,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   '$leaseNumber\nEnds Dec 31, 2027',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.ink500,
+                                    color: isDark ? const Color(0xFF94A3B8) : AppColors.ink500,
                                     height: 1.3,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.ink400),
+                          Icon(Icons.chevron_right_rounded, color: isDark ? const Color(0xFF64748B) : AppColors.ink400),
                         ],
                       ),
                     ),
@@ -323,6 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Section 5: Settings (Tenant)
               _buildSectionHeader('Settings'),
               _buildSectionGroup([
+                _buildThemeSwitchItem(),
                 _buildMenuItem(
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifications',
@@ -341,8 +355,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
             ] else ...[
               // Help & Support Section (Applicant)
-              _buildSectionHeader('Support'),
+              _buildSectionHeader('Settings & Support'),
               _buildSectionGroup([
+                _buildThemeSwitchItem(),
                 _buildMenuItem(
                   icon: Icons.help_outline_rounded,
                   title: 'Help & Support',
@@ -399,18 +414,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildSectionGroup(List<Widget> items) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
-          decoration: AppDecorations.card(radius: 18),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0D1B33) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark ? const Color(0xFF1E3A5F) : AppColors.border.withValues(alpha: 0.85),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0xFF0A1832).withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: Column(
             children: List.generate(items.length, (i) {
               return Column(
                 children: [
                   items[i],
                   if (i < items.length - 1)
-                    const Divider(color: AppColors.border, height: 1, indent: 52),
+                    Divider(
+                      color: isDark ? const Color(0xFF1E3A5F) : AppColors.border,
+                      height: 1,
+                      indent: 52,
+                    ),
                 ],
               );
             }),
@@ -425,28 +459,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: AppColors.ink700),
+            Icon(icon, size: 20, color: isDark ? const Color(0xFF94A3B8) : AppColors.ink700),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.ink900,
+                  color: isDark ? Colors.white : AppColors.ink900,
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink400),
+            Icon(Icons.chevron_right_rounded, size: 18, color: isDark ? const Color(0xFF64748B) : AppColors.ink400),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildThemeSwitchItem() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        final isDarkModeActive = themeMode == ThemeMode.dark ||
+            (themeMode == ThemeMode.system &&
+                MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDarkModeActive
+                      ? const Color(0xFF1E3A8A).withValues(alpha: 0.4)
+                      : const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isDarkModeActive ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                  size: 18,
+                  color: isDarkModeActive ? const Color(0xFF60A5FA) : const Color(0xFFF59E0B),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Dark Mode',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.ink900,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      themeMode == ThemeMode.system
+                          ? 'Auto (System sync)'
+                          : (isDarkModeActive ? 'On (Midnight Navy)' : 'Off (Light)'),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.ink400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: isDarkModeActive,
+                activeTrackColor: AppColors.electricBlue,
+                activeThumbColor: Colors.white,
+                onChanged: (val) {
+                  ThemeService.setThemeMode(val ? ThemeMode.dark : ThemeMode.light);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

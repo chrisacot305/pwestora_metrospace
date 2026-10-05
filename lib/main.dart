@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'services/api_service.dart';
+import 'services/theme_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_shell.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ThemeService.init();
   runApp(const PwestoraApp());
 }
 
@@ -13,11 +16,18 @@ class PwestoraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Pwestora',
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      home: const AuthGate(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, currentThemeMode, _) {
+        return MaterialApp(
+          title: 'Pwestora',
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(),
+          darkTheme: buildDarkAppTheme(),
+          themeMode: currentThemeMode,
+          home: const AuthGate(),
+        );
+      },
     );
   }
 }

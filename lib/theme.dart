@@ -193,9 +193,11 @@ class AppDecorations {
 ThemeData buildAppTheme() {
   return ThemeData(
     useMaterial3: true,
+    brightness: Brightness.light,
     scaffoldBackgroundColor: AppColors.bg,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
+      brightness: Brightness.light,
       primary: AppColors.primary,
       secondary: AppColors.electricBlue,
       error: AppColors.error,
@@ -248,6 +250,75 @@ ThemeData buildAppTheme() {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: AppColors.border.withValues(alpha: 0.85)),
+      ),
+    ),
+    fontFamily: GoogleFonts.plusJakartaSans().fontFamily,
+  );
+}
+
+ThemeData buildDarkAppTheme() {
+  const darkBg = Color(0xFF070F1E);
+  const darkSurface = Color(0xFF0D1B33);
+  const darkBorder = Color(0xFF1E3A5F);
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: darkBg,
+    colorScheme: const ColorScheme.dark(
+      primary: AppColors.electricBlue,
+      secondary: AppColors.cyanGlow,
+      error: AppColors.error,
+      surface: darkSurface,
+      onSurface: Colors.white,
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: darkSurface,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: GoogleFonts.plusJakartaSans(
+        color: Colors.white,
+        fontSize: 19,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.electricBlue,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.1),
+        elevation: 0,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: darkSurface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: darkBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: darkBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.electricBlue, width: 1.5),
+      ),
+    ),
+    cardTheme: CardThemeData(
+      color: darkSurface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: darkBorder),
       ),
     ),
     fontFamily: GoogleFonts.plusJakartaSans().fontFamily,

@@ -129,12 +129,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final rentAmount = (widget.lease['rent'] as num?)?.toDouble() ?? 12000.0;
     final now = DateTime.now();
     final currentMonthName = _getMonthName(now.month);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: isDark ? const Color(0xFF070F1E) : const Color(0xFFF7F8FA),
       body: RefreshIndicator(
         onRefresh: _refresh,
         color: AppColors.midnightNavy,
@@ -160,20 +161,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           Text(
                             'Hello ${_userName.isNotEmpty ? _userName.split(' ').first : 'Jake'}!',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF111418),
+                              color: isDark ? Colors.white : const Color(0xFF111418),
                               letterSpacing: -0.9,
                             ),
                           ),
                           const SizedBox(height: 3),
-                          const Text(
+                          Text(
                             "Let's manage your space today.",
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                               letterSpacing: -0.1,
                             ),
                           ),
@@ -198,10 +199,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF1E3A5F) : Colors.white,
+                            width: 2,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
+                              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -380,11 +384,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF0D1B33) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                    border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -395,12 +400,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       // 1. Payment Plan with Peso Sign
                       _buildIslandActionItem(
-                        iconWidget: const Text(
+                        isDark: isDark,
+                        iconWidget: Text(
                           '₱',
                           style: TextStyle(
                             fontSize: 21,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF111418),
+                            color: isDark ? Colors.white : const Color(0xFF111418),
                           ),
                         ),
                         label: 'Payment Plan',
@@ -418,6 +424,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       // 2. Receipts with Official Receipt Icon
                       _buildIslandActionItem(
+                        isDark: isDark,
                         icon: Icons.receipt_long_rounded,
                         label: 'Receipts',
                         onTap: () => _showReceiptsModal(rentAmount),
@@ -425,6 +432,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       // 3. Explore with Storefront Icon
                       _buildIslandActionItem(
+                        isDark: isDark,
                         icon: Icons.storefront_outlined,
                         label: 'Explore',
                         onTap: _openBrowseCatalog,
@@ -441,11 +449,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF0D1B33) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                    border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -459,12 +468,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Tenant Updates',
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF111418),
+                              color: isDark ? Colors.white : const Color(0xFF111418),
                               letterSpacing: -0.4,
                             ),
                           ),
@@ -492,6 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       // 1. Dynamic Monthly Stall Rent Row
                       _buildActivityRow(
+                        isDark: isDark,
                         icon: Icons.receipt_long_rounded,
                         title: 'Monthly Stall Rent',
                         subtitle: 'Due: 30 $currentMonthName ${now.year} • Active Lease',
@@ -511,8 +521,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               final ticket = t as Map<String, dynamic>;
                               return Column(
                                 children: [
-                                  const Divider(color: Color(0xFFF3F4F6), height: 24),
-                                  _buildTicketActivityRow(ticket),
+                                  Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
+                                  _buildTicketActivityRow(ticket, isDark: isDark),
                                 ],
                               );
                             }).toList(),
@@ -534,8 +544,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           return Column(
                             children: [
-                              const Divider(color: Color(0xFFF3F4F6), height: 24),
+                              Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
                               _buildActivityRow(
+                                isDark: isDark,
                                 icon: isApproved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
                                 title: 'Payment Arrangement',
                                 subtitle: '$plan • $status',
@@ -568,8 +579,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           return Column(
                             children: [
-                              const Divider(color: Color(0xFFF3F4F6), height: 24),
+                              Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF3F4F6), height: 24),
                               _buildActivityRow(
+                                isDark: isDark,
                                 icon: Icons.gavel_rounded,
                                 title: 'Notice of Infraction (Strike $strike)',
                                 subtitle: latest['rule_name']?.toString() ?? 'Lessor Policy Update',
@@ -608,6 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Widget? iconWidget,
     required String label,
     required VoidCallback onTap,
+    bool isDark = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -620,15 +633,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               width: 52,
               height: 52,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF3F4F6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF162544) : const Color(0xFFF3F4F6),
                 shape: BoxShape.circle,
+                border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 1) : null,
               ),
               child: Center(
                 child: iconWidget ??
                     Icon(
                       icon,
-                      color: const Color(0xFF111418),
+                      color: isDark ? Colors.white : const Color(0xFF111418),
                       size: 21,
                     ),
               ),
@@ -636,10 +650,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 8),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF4B5563),
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
                 letterSpacing: -0.1,
               ),
               textAlign: TextAlign.center,
@@ -656,6 +670,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String subtitle,
     required String trailing,
     VoidCallback? onTap,
+    bool isDark = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -668,10 +683,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: isDark ? const Color(0xFF162544) : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(13),
+                border: isDark ? Border.all(color: const Color(0xFF1E3A5F), width: 0.8) : null,
               ),
-              child: Icon(icon, color: const Color(0xFF111418), size: 20),
+              child: Icon(icon, color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF111418), size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -680,10 +696,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF111418),
+                      color: isDark ? Colors.white : const Color(0xFF111418),
                       letterSpacing: -0.1,
                     ),
                     maxLines: 1,
@@ -692,10 +708,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w400,
-                      color: Color(0xFF8A92A0),
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF8A92A0),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -706,10 +722,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 10),
             Text(
               trailing,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF111418),
+                color: isDark ? Colors.white : const Color(0xFF111418),
                 letterSpacing: -0.3,
               ),
             ),
@@ -719,7 +735,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTicketActivityRow(Map<String, dynamic> ticket) {
+  Widget _buildTicketActivityRow(Map<String, dynamic> ticket, {bool isDark = false}) {
     final title = ticket['title']?.toString() ?? 'Maintenance Request';
     final category = ticket['category']?.toString() ?? 'General';
     final ticketId = '#SL-${(ticket['id'] ?? '00001').toString().padLeft(5, '0')}';
@@ -730,6 +746,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isResolved = stageNum >= kTicketStages.length - 1;
 
     return _buildActivityRow(
+      isDark: isDark,
       icon: icon,
       title: title,
       subtitle: '$ticketId • $stageName',

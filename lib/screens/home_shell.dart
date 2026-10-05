@@ -115,6 +115,13 @@ class _HomeShellState extends State<HomeShell> {
   /// Bottom Dock for Active Tenants: Home, Schedule, (+) Report, Chat, Me
   /// Featuring a smooth scooped cradle with elevated Report button and Navy Blue active/hover states.
   Widget _buildTenantDock(Map<String, dynamic> lease, int currentIndex) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldBg = isDark ? const Color(0xFF070F1E) : AppColors.bg;
+    final dockBg = isDark ? const Color(0xFF0D1B33) : Colors.white;
+    final dockBorder = isDark ? const Color(0xFF1E3A5F) : AppColors.border;
+    final dockShadow = isDark ? Colors.black : const Color(0xFF0A1832);
+    final reportLabelColor = isDark ? Colors.white : const Color(0xFF0A1832);
+
     return SafeArea(
       top: false,
       child: Container(
@@ -124,9 +131,9 @@ class _HomeShellState extends State<HomeShell> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.bg.withValues(alpha: 0.0),
-              AppColors.bg.withValues(alpha: 0.95),
-              AppColors.bg,
+              scaffoldBg.withValues(alpha: 0.0),
+              scaffoldBg.withValues(alpha: 0.95),
+              scaffoldBg,
             ],
           ),
         ),
@@ -144,8 +151,9 @@ class _HomeShellState extends State<HomeShell> {
                   Positioned.fill(
                     child: CustomPaint(
                       painter: ScoopedCradlePainter(
-                        color: Colors.white,
-                        shadowColor: const Color(0xFF0A1832),
+                        color: dockBg,
+                        shadowColor: dockShadow,
+                        borderColor: dockBorder,
                         cornerRadius: 32,
                         cradleWidth: 86,
                         cradleDepth: 34,
@@ -195,15 +203,15 @@ class _HomeShellState extends State<HomeShell> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  SizedBox(height: 23), // Matches 23px Icon height in ScoopedNavItem
-                                  SizedBox(height: 3),  // Matches 3px gap in ScoopedNavItem
+                                children: [
+                                  const SizedBox(height: 23), // Matches 23px Icon height in ScoopedNavItem
+                                  const SizedBox(height: 3),  // Matches 3px gap in ScoopedNavItem
                                   Text(
                                     'Report',
                                     style: TextStyle(
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
-                                      color: Color(0xFF0A1832),
+                                      color: reportLabelColor,
                                       letterSpacing: -0.2,
                                     ),
                                     maxLines: 1,
@@ -285,6 +293,12 @@ class _HomeShellState extends State<HomeShell> {
 
   /// Bottom Dock for Prospective Tenants / Applicants: Browse, Applications, Me
   Widget _buildApplicantDock(int currentIndex) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldBg = isDark ? const Color(0xFF070F1E) : AppColors.bg;
+    final dockBg = isDark ? const Color(0xFF0D1B33) : Colors.white;
+    final dockBorder = isDark ? const Color(0xFF1E3A5F) : AppColors.border;
+    final dockShadow = isDark ? Colors.black : const Color(0xFF0A1832);
+
     return SafeArea(
       top: false,
       child: Container(
@@ -294,9 +308,9 @@ class _HomeShellState extends State<HomeShell> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.bg.withValues(alpha: 0.0),
-              AppColors.bg.withValues(alpha: 0.95),
-              AppColors.bg,
+              scaffoldBg.withValues(alpha: 0.0),
+              scaffoldBg.withValues(alpha: 0.95),
+              scaffoldBg,
             ],
           ),
         ),
@@ -308,17 +322,17 @@ class _HomeShellState extends State<HomeShell> {
             child: Container(
               height: 68,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: dockBg,
                 borderRadius: BorderRadius.circular(34),
-                border: Border.all(color: AppColors.border.withValues(alpha: 0.8), width: 1),
+                border: Border.all(color: dockBorder.withValues(alpha: 0.8), width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0A1832).withValues(alpha: 0.08),
+                    color: dockShadow.withValues(alpha: isDark ? 0.3 : 0.08),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: const Color(0xFF0A1832).withValues(alpha: 0.03),
+                    color: dockShadow.withValues(alpha: isDark ? 0.15 : 0.03),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
