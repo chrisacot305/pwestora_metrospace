@@ -143,17 +143,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ================= TOP HEADER (PROFILE AVATAR) =================
+              // ================= TOP HEADER (GREETING & PROFILE AVATAR) =================
               Padding(
                 padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 12,
+                  top: MediaQuery.of(context).padding.top + 16,
                   left: 20,
                   right: 20,
-                  bottom: 8,
+                  bottom: 12,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hello ${_userName.isNotEmpty ? _userName.split(' ').first : 'Jake'}!',
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF111418),
+                              letterSpacing: -0.9,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            "Let's manage your space today.",
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     InkWell(
                       borderRadius: BorderRadius.circular(22),
                       onTap: () {
@@ -190,35 +217,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ================= GREETING TITLE & SUBTITLE =================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hello ${_userName.isNotEmpty ? _userName.split(' ').first : 'Jake'}!',
-                      style: const TextStyle(
-                        fontSize: 29,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111418),
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      "Let's manage your space today.",
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF64748B),
-                        letterSpacing: -0.1,
                       ),
                     ),
                   ],

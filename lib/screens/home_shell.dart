@@ -183,8 +183,37 @@ class _HomeShellState extends State<HomeShell> {
                             onTap: (idx) => setState(() => _currentIndex = idx),
                           ),
                         ),
-                        // Center gap reserved for the elevated action button
-                        const SizedBox(width: 68),
+                        // Center Report item aligned on the exact same baseline as other nav items
+                        SizedBox(
+                          width: 68,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _openReportFlow(lease),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              color: Colors.transparent,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  SizedBox(height: 23), // Matches 23px Icon height in ScoopedNavItem
+                                  SizedBox(height: 3),  // Matches 3px gap in ScoopedNavItem
+                                  Text(
+                                    'Report',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0A1832),
+                                      letterSpacing: -0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                         Expanded(
                           child: ScoopedNavItem(
                             index: 2,
@@ -208,54 +237,39 @@ class _HomeShellState extends State<HomeShell> {
                       ],
                     ),
                   ),
-                  // 3. Elevated circular button and Report title resting in the scooped cradle
+                  // 3. Elevated circular button resting in the scooped cradle
                   Positioned(
-                    top: 0,
+                    top: 5,
                     left: 0,
                     right: 0,
                     child: Center(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _openReportFlow(lease),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: AppColors.electricBlue,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF0A1832).withValues(alpha: 0.18),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                  BoxShadow(
-                                    color: AppColors.electricBlue.withValues(alpha: 0.35),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.electricBlue,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF0A1832).withValues(alpha: 0.18),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
-                              child: const Icon(
-                                Icons.add_rounded,
-                                color: Colors.white,
-                                size: 26,
+                              BoxShadow(
+                                color: AppColors.electricBlue.withValues(alpha: 0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            const Text(
-                              'Report',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0A1832),
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
                         ),
                       ),
                     ),
