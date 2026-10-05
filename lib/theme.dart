@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Brand colors — tailored to Pwestora's midnight navy and electric blue theme.
 class AppColors {
+  // Luxury Palette Tokens (as chosen by user)
+  static const midnightNavy = Color(0xFF03071E);
+  static const deepNavy = Color(0xFF0A193F);
+  static const slateRoyal = Color(0xFF1C3F73);
+  static const warmIvory = Color(0xFFFBF3DC);
+
   // Midnight Navy Palette
   static const primary = Color(0xFF0A1832);
   static const primaryLight = Color(0xFF183868);
@@ -194,13 +201,13 @@ ThemeData buildAppTheme() {
       error: AppColors.error,
       surface: AppColors.surface,
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: AppColors.surface,
       foregroundColor: AppColors.ink900,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.plusJakartaSans(
         color: AppColors.ink900,
         fontSize: 19,
         fontWeight: FontWeight.w800,
@@ -213,7 +220,7 @@ ThemeData buildAppTheme() {
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.1),
+        textStyle: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.1),
         elevation: 0,
       ),
     ),
@@ -221,7 +228,7 @@ ThemeData buildAppTheme() {
       filled: true,
       fillColor: AppColors.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-      hintStyle: const TextStyle(color: AppColors.ink400, fontSize: 14),
+      hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.ink400, fontSize: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.border),
@@ -243,7 +250,7 @@ ThemeData buildAppTheme() {
         side: BorderSide(color: AppColors.border.withValues(alpha: 0.85)),
       ),
     ),
-    fontFamily: 'Roboto',
+    fontFamily: GoogleFonts.plusJakartaSans().fontFamily,
   );
 }
 
