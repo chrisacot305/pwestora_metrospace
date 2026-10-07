@@ -124,19 +124,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       }
     }
 
-    // 2. Live Payments from API
-    for (final p in _apiPayments) {
+    // 2. Live Payments from API (or sample for demo)
+    final now = DateTime.now();
+    final isPastOrCurrent = _currentMonth.year < now.year ||
+        (_currentMonth.year == now.year && _currentMonth.month <= now.month);
+
+    final effectivePayments = _apiPayments.isNotEmpty
+        ? _apiPayments
+        : (isPastOrCurrent
+            ? [
+                {
+                  'id': 'hist_${_currentMonth.year}_${_currentMonth.month}',
+                  'amount': rentNum,
+                  'paid_at': '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-05 14:30:00',
+                  'method': 'GCash / InstaPay',
+                }
+              ]
+            : []);
+
+    for (final p in effectivePayments) {
       final paidAtStr = p['paid_at']?.toString() ?? '';
       DateTime? dt = DateTime.tryParse(paidAtStr);
       if (dt != null && dt.year == _currentMonth.year && dt.month == _currentMonth.month) {
         final amount = (p['amount'] as num?)?.toDouble() ?? 0.0;
         final method = p['method']?.toString() ?? 'Payment';
-        final note = p['note']?.toString();
-        final title = (note != null && note.isNotEmpty) ? note : 'Rent Payment';
 
         list.add({
           'id': 'pay_${p['id']}',
-          'title': title,
+          'title': 'Monthly Rent Payment',
           'subtitle': '₱${_formatMoney(amount)} • $method',
           'day': dt.day,
           'month': _getShortMonth(dt.month),

@@ -417,10 +417,24 @@ class ApiService {
     }
   }
 
+  // ---------------- 7-Day Grace Period & Rent Arrears Status ----------------
+  static const String _kDemoRentStatusKey = 'demo_rent_grace_status';
+
+  static Future<String> getDemoRentStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kDemoRentStatusKey) ?? 'normal';
+  }
+
+  static Future<void> setDemoRentStatus(String status) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kDemoRentStatusKey, status);
+  }
+
   // ---------------- Conflict Resolution / Violations (Section C) ----------------
 
   static const String _kDemoStrikeKey = 'demo_violation_strike_level';
   static const String _kAcknowledgedStrikesKey = 'demo_acknowledged_strikes';
+  static const String _kDemoStrikeCategoryKey = 'demo_violation_strike_category';
 
   static Future<int> getDemoStrikeLevel() async {
     final prefs = await SharedPreferences.getInstance();
@@ -441,6 +455,16 @@ class ApiService {
     }
   }
 
+  static Future<String> getDemoStrikeCategory() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kDemoStrikeCategoryKey) ?? 'past_due';
+  }
+
+  static Future<void> setDemoStrikeCategory(String cat) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kDemoStrikeCategoryKey, cat);
+  }
+
   static Future<List<Map<String, dynamic>>> fetchViolations() async {
     try {
       final data = await _getJson('violations_list.php', auth: true);
@@ -459,45 +483,65 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
     final isAck = ackList.contains(level.toString());
+    final cat = await getDemoStrikeCategory();
+    final isPastDue = cat == 'past_due';
 
     final list = <Map<String, dynamic>>[];
     if (level >= 1) {
       list.add({
         'id': 101,
-        'category': 'Late Operating Hours',
+        'category': isPastDue ? 'Unpaid Rent Default (Past Due)' : 'Late Operating Hours',
         'strike': 1,
-        'clause': 'Clause 8.2 — Standard Operating Hours & Curfew',
-        'description': 'Stall was observed operating past the mandated commercial closing time of 10:00 PM without prior written permit.',
+        'clause': isPastDue
+            ? 'Clause 3.1 — 7-Day Grace Period Expiration & Payment Default'
+            : 'Clause 8.2 — Standard Operating Hours & Curfew',
+        'description': isPastDue
+            ? 'October monthly rent remained unpaid after the 7-calendar-day grace period expired on November 6 without an approved arrangement. First formal default citation recorded.'
+            : 'Stall was observed operating past the mandated commercial closing time of 10:00 PM without prior written permit.',
         'penalty_amount': 0.0,
-        'issued_at': '2026-09-18 22:45:00',
+        'issued_at': '2026-11-07 08:30:00',
         'acknowledged': (level > 1 || isAck) ? 1 : 0,
-        'image_url': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80',
+        'image_url': isPastDue
+            ? 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500&q=80'
+            : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80',
       });
     }
     if (level >= 2) {
       list.add({
         'id': 102,
-        'category': 'Improper Waste Disposal',
+        'category': isPastDue ? 'Recurrent Payment Default (2nd Past Due)' : 'Improper Waste Disposal',
         'strike': 2,
-        'clause': 'Clause 12.4 — Common Area Sanitation & Waste Disposal',
-        'description': 'Commercial garbage bins left outside stall perimeter during non-collection hours, obstructing common hallway walkway.',
+        'clause': isPastDue
+            ? 'Clause 3.2 — Contractual Late Penalties & Arrears Default'
+            : 'Clause 12.4 — Common Area Sanitation & Waste Disposal',
+        'description': isPastDue
+            ? 'Second consecutive monthly rent default recorded. Contractual late penalty fee of ₱500 automatically injected into billing statement.'
+            : 'Commercial garbage bins left outside stall perimeter during non-collection hours, obstructing common hallway walkway.',
         'penalty_amount': 500.0,
-        'issued_at': '2026-09-20 09:15:00',
+        'issued_at': '2026-12-07 09:15:00',
         'acknowledged': (level > 2 || isAck) ? 1 : 0,
-        'image_url': 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=500&q=80',
+        'image_url': isPastDue
+            ? 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=500&q=80'
+            : 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=500&q=80',
       });
     }
     if (level >= 3) {
       list.add({
         'id': 103,
-        'category': 'Unauthorized Structural Alteration',
+        'category': isPastDue ? 'Chronic Rent Default & Arrears (Eviction Grounds)' : 'Unauthorized Structural Alteration',
         'strike': 3,
-        'clause': 'Clause 15.1 — Structural Modifications & Safety Standards',
-        'description': 'Heavy electrical wiring installation performed without management authorization and safety inspection permit. Chronic breach threshold reached.',
+        'clause': isPastDue
+            ? 'Clause 3.3 — Material Lease Default & Immediate Contract Termination'
+            : 'Clause 15.1 — Structural Modifications & Safety Standards',
+        'description': isPastDue
+            ? 'Account reached the 3rd payment default threshold with accumulated arrears. Formal Notice of Eviction initiated under governing commercial lease code.'
+            : 'Heavy electrical wiring installation performed without management authorization and safety inspection permit. Chronic breach threshold reached.',
         'penalty_amount': 1500.0,
-        'issued_at': '2026-09-21 14:30:00',
+        'issued_at': '2027-01-07 14:30:00',
         'acknowledged': isAck ? 1 : 0,
-        'image_url': 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80',
+        'image_url': isPastDue
+            ? 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=500&q=80'
+            : 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80',
       });
     }
     return list.reversed.toList();

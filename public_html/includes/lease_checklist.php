@@ -19,6 +19,23 @@ $LEASE_CHECKLIST_ITEMS = [
         'text'  => "Monthly rent may increase by up to five percent (5%) upon each annual renewal, "
                  . "consistent with standard commercial leasing practice.",
     ],
+    'rent_grace_period' => [
+        'label' => 'Rent Grace Period & Default Rules',
+        'text'  => "Monthly rent is due on the scheduled due date. A seven (7) calendar-day grace period is granted with zero late penalty. "
+                 . "Payments unpaid after Day 7 incur a contractual late fee and initiate Strike 1 payment default escalation.",
+    ],
+    'rent_restructuring_policy' => [
+        'label' => 'Rent Restructuring Policy',
+        'text'  => "Tenants facing temporary cash-flow difficulty may request to split monthly rent into 2 or 3 installments subject to lessor approval. "
+                 . "Late fees are frozen provided agreed installment deadlines are strictly settled.",
+        'is_mandatory' => true,
+    ],
+    'violations_discipline_policy' => [
+        'label' => 'Violations & 3-Strike Disciplinary Policy',
+        'text'  => "Unpaid rent past grace period, broken restructuring plans, or unauthorized space alterations trigger a 3-strike escalation "
+                 . "(Strike 1: Warning, Strike 2: Notice & Fine, Strike 3: Lease Termination and Eviction).",
+        'is_mandatory' => true,
+    ],
     'use_of_premises' => [
         'label' => 'Use of Premises',
         'text'  => "The leased premises will be used solely for the business purpose stated in the tenant's application, "

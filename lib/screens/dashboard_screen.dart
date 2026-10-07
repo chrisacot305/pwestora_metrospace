@@ -7,6 +7,7 @@ import 'browse_screen.dart';
 import 'payment_arrangement_screen.dart';
 import 'rent_payment_screen.dart';
 import 'violation_notice_sheet.dart';
+import 'receipts_history_screen.dart';
 import '../widgets/luxury_rent_card.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<dynamic>> _ticketsFuture;
   late Future<List<dynamic>> _arrangementsFuture;
   late Future<List<Map<String, dynamic>>> _violationsFuture;
+  late Future<String> _rentStatusFuture;
   String _userName = '';
   bool _gateChecked = false;
 
@@ -38,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _ticketsFuture = ApiService.fetchTickets();
     _arrangementsFuture = ApiService.fetchInstallmentRequests();
     _violationsFuture = ApiService.fetchViolations();
+    _rentStatusFuture = ApiService.getDemoRentStatus();
     _loadUserName();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -77,6 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _ticketsFuture = ApiService.fetchTickets();
       _arrangementsFuture = ApiService.fetchInstallmentRequests();
       _violationsFuture = ApiService.fetchViolations();
+      _rentStatusFuture = ApiService.getDemoRentStatus();
     });
     await Future.wait([_ticketsFuture, _arrangementsFuture, _violationsFuture]);
     widget.onRefresh();
@@ -231,109 +235,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 14),
 
               // ================= STACKED LUXURY RENT CARD & RESTRUCTURING =================
-              FutureBuilder<List<dynamic>>(
-                future: _arrangementsFuture,
-                builder: (context, snapshot) {
-                  final reqs = snapshot.data ?? [];
-                  final latest = reqs.isNotEmpty ? (reqs.first as Map<String, dynamic>) : null;
-                  final status = (latest?['status'] ?? '').toString().toLowerCase();
-                  final plan = latest?['plan_label'] ?? '2 payments';
-                  final isApproved = status == 'approved';
-                  final isPending = status == 'pending';
-                  final hasRestructuring = isApproved || isPending;
-                  final currentPart = (latest?['current_part'] as int?) ?? 1;
-                  final effectiveDueDate = hasRestructuring && isApproved && currentPart > 1
-                      ? '15 Nov ${now.year}'
-                      : '30 $currentMonthName ${now.year}';
+              FutureBuilder<String>(
+                future: _rentStatusFuture,
+                builder: (context, rentStatusSnap) {
+                  final rentStatus = rentStatusSnap.data ?? 'normal';
+                  final isOverdue = rentStatus == 'overdue';
+                  final isGracePeriod = rentStatus == 'grace_period';
+                  final baseRent = rentAmount > 0 ? rentAmount : 12000.0;
+                  final effectiveRentAmount = isOverdue
+                      ? (baseRent * 2 + 500)
+                      : rentAmount;
+                  final overdueSubtext = isOverdue ? 'October + November' : null;
 
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: LuxuryRentCard(
-                          rentAmount: rentAmount,
-                          dueDate: effectiveDueDate,
-                          tenantName: _userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'),
-                          activeArrangement: hasRestructuring ? latest : null,
-                          onArrangementTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => PaymentArrangementScreen(
-                                  lease: widget.lease,
-                                  onArrangementSubmitted: () => _refresh(),
-                                ),
-                              ),
-                            ).then((_) => _refresh());
-                          },
-                          onPayRent: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => RentPaymentScreen(
-                                  lease: widget.lease,
-                                  rentAmount: rentAmount,
-                                  activeArrangement: hasRestructuring ? latest : null,
-                                  onPaymentSubmitted: () => _refresh(),
-                                ),
-                              ),
-                            ).then((_) => _refresh());
-                          },
-                        ),
-                      ),
+                  return FutureBuilder<List<dynamic>>(
+                    future: _arrangementsFuture,
+                    builder: (context, snapshot) {
+                      final reqs = snapshot.data ?? [];
+                      final latest = reqs.isNotEmpty ? (reqs.first as Map<String, dynamic>) : null;
+                      final status = (latest?['status'] ?? '').toString().toLowerCase();
+                      final plan = latest?['plan_label'] ?? '2 payments';
+                      final isApproved = status == 'approved';
+                      final isPending = status == 'pending';
+                      final hasRestructuring = !isOverdue && (isApproved || isPending);
+                      final currentPart = (latest?['current_part'] as int?) ?? 1;
+                      final effectiveDueDate = hasRestructuring && isApproved && currentPart > 1
+                          ? '15 Nov ${now.year}'
+                          : '30 $currentMonthName ${now.year}';
 
-                      // Active Restructuring Plan Strip (if any)
-                      if (hasRestructuring)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PaymentArrangementScreen(
-                                    lease: widget.lease,
-                                    onArrangementSubmitted: () => _refresh(),
-                                  ),
-                                ),
-                              ).then((_) => _refresh());
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
-                                    size: 15,
-                                    color: isApproved ? const Color(0xFF10B981) : const Color(0xFFD97706),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      isApproved
-                                          ? 'Restructuring Active: $plan approved'
-                                          : 'Restructuring: $plan under lessor review',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: isApproved ? const Color(0xFF065F46) : const Color(0xFF92400E),
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: LuxuryRentCard(
+                              rentAmount: effectiveRentAmount,
+                              dueDate: effectiveDueDate,
+                              tenantName: _userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'),
+                              activeArrangement: hasRestructuring ? latest : null,
+                              isOverdue: isOverdue,
+                              isGracePeriod: isGracePeriod,
+                              graceDaysRemaining: 5,
+                              overdueSubtext: overdueSubtext,
+                              onArrangementTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PaymentArrangementScreen(
+                                      lease: widget.lease,
+                                      onArrangementSubmitted: () => _refresh(),
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
-                                ],
-                              ),
+                                ).then((_) => _refresh());
+                              },
+                              onPayRent: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => RentPaymentScreen(
+                                      lease: widget.lease,
+                                      rentAmount: baseRent,
+                                      isOverdue: isOverdue,
+                                      activeArrangement: hasRestructuring ? latest : null,
+                                      onPaymentSubmitted: () => _refresh(),
+                                    ),
+                                  ),
+                                ).then((_) => _refresh());
+                              },
                             ),
                           ),
-                        ),
-                    ],
+
+                          // Active Restructuring Plan Strip (if any)
+                          if (hasRestructuring)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PaymentArrangementScreen(
+                                        lease: widget.lease,
+                                        onArrangementSubmitted: () => _refresh(),
+                                      ),
+                                    ),
+                                  ).then((_) => _refresh());
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                                        size: 15,
+                                        color: isApproved ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          isApproved
+                                              ? 'Restructuring Active: $plan approved'
+                                              : 'Restructuring: $plan under lessor review',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: isApproved ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   );
                 },
               ),
@@ -456,7 +479,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         isDark: isDark,
                         icon: Icons.receipt_long_rounded,
                         label: 'Receipts',
-                        onTap: () => _showReceiptsModal(rentAmount),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReceiptsHistoryScreen(
+                                lease: widget.lease,
+                                rentAmount: rentAmount,
+                              ),
+                            ),
+                          );
+                        },
                       ),
 
                       // 3. Explore with Storefront Icon
@@ -988,133 +1021,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showReceiptsModal(double rentAmount) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Receipts & Billing History',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: AppColors.midnightNavy,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'View and download your official payment receipts:',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.receipt_long_rounded, color: AppColors.midnightNavy, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Current Billing Statement',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: AppColors.midnightNavy),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '₱${_formatMoney(rentAmount)} • Generated for this cycle',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Statement generated successfully.')),
-                      );
-                    },
-                    child: const Text('View', style: TextStyle(fontWeight: FontWeight.w800)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Previous Month Official Receipt',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: AppColors.midnightNavy),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'OR #2026-09-0041 • Paid & Verified',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Downloading official receipt PDF...')),
-                      );
-                    },
-                    child: const Text('Download', style: TextStyle(fontWeight: FontWeight.w800)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
 }
 

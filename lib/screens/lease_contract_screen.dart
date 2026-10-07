@@ -44,6 +44,27 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
       'note': '',
     },
     {
+      'key': 'rent_grace_period',
+      'label': '7-Day Grace Period & Default Rules',
+      'standard': "Monthly rent is due on the scheduled due date. A seven (7) calendar-day grace period is granted with zero late penalty. Payments unpaid after Day 7 incur a ₱500 late fee and initiate Strike 1 payment default escalation.",
+      'agreed': true,
+      'note': '',
+    },
+    {
+      'key': 'rent_restructuring_policy',
+      'label': 'Rent Restructuring Policy',
+      'standard': "Tenants facing temporary cash-flow difficulty may request to split monthly rent into 2 or 3 installments subject to lessor approval. Late fees are frozen provided agreed installment deadlines are strictly settled.",
+      'agreed': true,
+      'note': '',
+    },
+    {
+      'key': 'violations_discipline_policy',
+      'label': 'Violations & 3-Strike Disciplinary Policy',
+      'standard': "Unpaid rent past grace period, broken restructuring plans, or unauthorized space alterations trigger a 3-strike escalation (Strike 1: Warning, Strike 2: Notice & Fine, Strike 3: Lease Termination and Eviction).",
+      'agreed': true,
+      'note': '',
+    },
+    {
       'key': 'lease_term',
       'label': 'Lease Term Duration',
       'standard': "Standard commercial occupancy period as agreed upon in the application proposal with mutual option to renew 60 days before expiration.",

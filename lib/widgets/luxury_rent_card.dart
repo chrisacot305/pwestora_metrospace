@@ -82,6 +82,10 @@ class LuxuryRentCard extends StatelessWidget {
   final VoidCallback onPayRent;
   final Map<String, dynamic>? activeArrangement;
   final VoidCallback? onArrangementTap;
+  final bool isOverdue;
+  final bool isGracePeriod;
+  final int graceDaysRemaining;
+  final String? overdueSubtext;
 
   const LuxuryRentCard({
     super.key,
@@ -91,6 +95,10 @@ class LuxuryRentCard extends StatelessWidget {
     required this.onPayRent,
     this.activeArrangement,
     this.onArrangementTap,
+    this.isOverdue = false,
+    this.isGracePeriod = false,
+    this.graceDaysRemaining = 5,
+    this.overdueSubtext,
   });
 
   String _formatMoney(num val) {
@@ -300,7 +308,7 @@ class LuxuryRentCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Monthly Rent',
+                              isOverdue ? 'Total Outstanding' : 'Monthly Rent',
                               style: TextStyle(
                                 fontSize: 11.5,
                                 height: 1.2,
@@ -324,7 +332,19 @@ class LuxuryRentCard extends StatelessWidget {
                                 letterSpacing: hasRestructuring ? -0.6 : -1.0,
                               ),
                             ),
-                            if (hasRestructuring) ...[
+                            if (isOverdue && overdueSubtext != null && overdueSubtext!.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                overdueSubtext!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ] else if (hasRestructuring) ...[
                               const SizedBox(height: 4),
                               Text(
                                 isPart1 ? 'Deferred (Part 1)' : 'Active Due',
@@ -400,15 +420,79 @@ class LuxuryRentCard extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                Text(
-                                  dueDate,
-                                  style: const TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: -0.2,
+                                if (isOverdue) ...[
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.circle, size: 7, color: Color(0xFFEF4444)),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        'OVERDUE',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFFEF4444),
+                                          letterSpacing: 0.6,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Past $dueDate',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                ] else if (isGracePeriod) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1E6BFF).withValues(alpha: 0.22),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFF60A5FA).withValues(alpha: 0.6),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF93C5FD)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${graceDaysRemaining}d Grace',
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFFBFDBFE),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Due $dueDate',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Text(
+                                    dueDate,
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -486,9 +570,9 @@ class LuxuryRentCard extends StatelessWidget {
                         size: 15,
                       ),
                       const SizedBox(width: 4),
-                      const Text(
-                        'Pay Rent',
-                        style: TextStyle(
+                      Text(
+                        isOverdue ? 'Pay Balance' : 'Pay Rent',
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,

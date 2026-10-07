@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'lease_contract_screen.dart';
@@ -111,6 +113,33 @@ class _ApplyScreenState extends State<ApplyScreen> {
       'defaultCounterPlaceholder': 'e.g. Requesting fixed rent with no escalation for 2 years',
     },
     {
+      'key': 'rent_grace_period',
+      'label': '7-Day Rent Grace Period & Default Rules',
+      'standard': "Monthly rent is due on the scheduled due date. A 7-calendar-day grace period is granted with zero late penalty. Unpaid rent past Day 7 incurs a ₱500 late fee and initiates Strike 1 payment default escalation.",
+      'agreed': true,
+      'isMandatory': true,
+      'controller': TextEditingController(),
+      'defaultCounterPlaceholder': 'e.g. Requesting 10-day grace period for bank clearance',
+    },
+    {
+      'key': 'rent_restructuring_policy',
+      'label': 'Rent Restructuring Policy',
+      'standard': "Tenants facing temporary cash-flow difficulty may request to split monthly rent into 2 or 3 installments subject to lessor approval. Late fees are frozen provided agreed installment deadlines are strictly settled.",
+      'agreed': true,
+      'isMandatory': true,
+      'controller': TextEditingController(),
+      'defaultCounterPlaceholder': '',
+    },
+    {
+      'key': 'violations_discipline_policy',
+      'label': 'Violations & 3-Strike Disciplinary Policy',
+      'standard': "Unpaid rent past grace period, broken restructuring plans, or unauthorized space alterations trigger a 3-strike escalation (Strike 1: Warning, Strike 2: Notice & Fine, Strike 3: Lease Termination and Eviction).",
+      'agreed': true,
+      'isMandatory': true,
+      'controller': TextEditingController(),
+      'defaultCounterPlaceholder': '',
+    },
+    {
       'key': 'lease_term',
       'label': 'Proposed Lease Duration',
       'standard': "Full commercial occupancy term as requested in the proposal with option to renew upon mutual agreement.",
@@ -160,6 +189,8 @@ class _ApplyScreenState extends State<ApplyScreen> {
     },
   ];
 
+  String get _draftStorageKey => 'apply_draft_prop_${widget.propertyId}';
+
   @override
   void initState() {
     super.initState();
@@ -167,6 +198,159 @@ class _ApplyScreenState extends State<ApplyScreen> {
         ? widget.askingRent!
         : 35000.0;
     _customRentCtrl.text = _effectiveRent.toStringAsFixed(0);
+    _loadDraft();
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> docMap = {};
+      for (final entry in _uploadedDocs.entries) {
+        docMap[entry.key] = {
+          'filename': entry.value.filename,
+          'path': entry.value.path,
+          'base64': base64Encode(entry.value.bytes),
+        };
+      }
+
+      final Map<String, dynamic> checklistMap = {};
+      for (final clause in _checklistClauses) {
+        final key = clause['key'] as String;
+        final agreed = clause['agreed'] as bool;
+        final note = (clause['controller'] as TextEditingController).text.trim();
+        checklistMap[key] = {
+          'agreed': agreed,
+          'note': note,
+        };
+      }
+
+      final draft = {
+        'business_name': _businessCtrl.text.trim(),
+        'category': _selectedCategory,
+        'term': _selectedTerm,
+        'effective_rent': _effectiveRent,
+        'custom_rate_mode': _customRateMode,
+        'request_fitout': _requestFitOutGrace,
+        'target_move_in': _targetMoveInDate.toIso8601String(),
+        'docs': docMap,
+        'checklist': checklistMap,
+        'saved_at': DateTime.now().toIso8601String(),
+      };
+
+      await prefs.setString(_draftStorageKey, jsonEncode(draft));
+    } catch (e) {
+      debugPrint('Error saving application draft: $e');
+    }
+  }
+
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftStorageKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final Map<String, dynamic> draft = jsonDecode(raw);
+      final docMap = draft['docs'] as Map<String, dynamic>?;
+
+      int restoredDocCount = 0;
+      if (docMap != null && docMap.isNotEmpty) {
+        for (final entry in docMap.entries) {
+          final data = entry.value as Map<String, dynamic>;
+          final base64Str = data['base64'] as String?;
+          final filename = data['filename'] as String? ?? '${entry.key}.jpg';
+          final path = data['path'] as String? ?? '';
+          if (base64Str != null && base64Str.isNotEmpty) {
+            try {
+              final bytes = base64Decode(base64Str);
+              _uploadedDocs[entry.key] = _UploadedDoc(
+                bytes: bytes,
+                filename: filename,
+                path: path,
+              );
+              restoredDocCount++;
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (_businessCtrl.text.isEmpty && draft['business_name'] != null && (draft['business_name'] as String).isNotEmpty) {
+        _businessCtrl.text = draft['business_name'] as String;
+      }
+      if (draft['category'] != null) {
+        _selectedCategory = draft['category'] as String;
+      }
+      if (draft['term'] != null) {
+        _selectedTerm = draft['term'] as int;
+      }
+      if (draft['effective_rent'] != null) {
+        _effectiveRent = (draft['effective_rent'] as num).toDouble();
+        _customRentCtrl.text = _effectiveRent.toStringAsFixed(0);
+      }
+      if (draft['custom_rate_mode'] != null) {
+        _customRateMode = draft['custom_rate_mode'] as bool;
+      }
+      if (draft['request_fitout'] != null) {
+        _requestFitOutGrace = draft['request_fitout'] as bool;
+      }
+      if (draft['target_move_in'] != null) {
+        final parsedDate = DateTime.tryParse(draft['target_move_in'] as String);
+        if (parsedDate != null) _targetMoveInDate = parsedDate;
+      }
+
+      final checklistMap = draft['checklist'] as Map<String, dynamic>?;
+      if (checklistMap != null) {
+        for (final clause in _checklistClauses) {
+          final key = clause['key'] as String;
+          if (checklistMap.containsKey(key)) {
+            final item = checklistMap[key] as Map<String, dynamic>;
+            final isMandatory = clause['isMandatory'] == true;
+            if (!isMandatory && item['agreed'] != null) {
+              clause['agreed'] = item['agreed'] as bool;
+            }
+            if (item['note'] != null && (item['note'] as String).isNotEmpty) {
+              (clause['controller'] as TextEditingController).text = item['note'] as String;
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        if (restoredDocCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 4),
+              content: Row(
+                children: [
+                  const Icon(Icons.history_toggle_off_rounded, color: AppColors.cyanGlow, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Restored $restoredDocCount uploaded document(s) from your saved draft.',
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading application draft: $e');
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftStorageKey);
+    } catch (e) {
+      debugPrint('Error clearing application draft: $e');
+    }
   }
 
   @override
@@ -189,6 +373,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
       }
       _effectiveRent = parsed;
     }
+    _saveDraft();
     HapticFeedback.lightImpact();
     setState(() {
       _error = null;
@@ -197,6 +382,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
   }
 
   void _proceedToChecklist() {
+    _saveDraft();
     HapticFeedback.lightImpact();
     setState(() => _currentStep = 2);
   }
@@ -239,6 +425,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
           path: picked.path,
         );
       });
+      await _saveDraft();
       HapticFeedback.selectionClick();
     } catch (e) {
       if (!mounted) return;
@@ -359,6 +546,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
 
       if (!mounted) return;
       _submittedNegotiationPayload = negotiationPayload;
+      await _clearDraft();
       HapticFeedback.mediumImpact();
       setState(() => _submitted = true);
     } catch (e) {
@@ -997,6 +1185,27 @@ class _ApplyScreenState extends State<ApplyScreen> {
                       ],
                     ),
                   ),
+                  if (attachedCount > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.borderLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.cloud_done_outlined, size: 12, color: AppColors.ink500),
+                          SizedBox(width: 4),
+                          Text(
+                            'Draft auto-saved',
+                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.ink500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -1015,7 +1224,6 @@ class _ApplyScreenState extends State<ApplyScreen> {
           final title = field['title'] as String;
           final subtitle = field['subtitle'] as String;
           final icon = field['icon'] as IconData;
-          final isRecommended = field['recommended'] as bool;
           final doc = _uploadedDocs[key];
           final isUploaded = doc != null;
 
@@ -1088,22 +1296,6 @@ class _ApplyScreenState extends State<ApplyScreen> {
                                       ),
                                     ],
                                   ),
-                                )
-                              else if (isRecommended)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Text(
-                                    'Recommended',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFFB45309),
-                                    ),
-                                  ),
                                 ),
                             ],
                           ),
@@ -1175,8 +1367,9 @@ class _ApplyScreenState extends State<ApplyScreen> {
                           icon: const Icon(Icons.close_rounded, color: AppColors.ink500, size: 18),
                           tooltip: 'Remove',
                           visualDensity: VisualDensity.compact,
-                          onPressed: () {
+                          onPressed: () async {
                             setState(() => _uploadedDocs.remove(key));
+                            await _saveDraft();
                             HapticFeedback.lightImpact();
                           },
                         ),
@@ -1289,15 +1482,27 @@ class _ApplyScreenState extends State<ApplyScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.successSoft, borderRadius: BorderRadius.circular(8)),
-                    child: Text('$agreedCount Standard Agreed', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.success)),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$agreedCount Standard Agreed',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.electricBlue),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   if (rebuttalCount > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
-                      child: Text('$rebuttalCount Counter-Offer(s)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$rebuttalCount Counter-Offer(s)',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
                     ),
                 ],
               ),
@@ -1315,6 +1520,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
         ...List.generate(_checklistClauses.length, (index) {
           final clause = _checklistClauses[index];
           final isAgreed = clause['agreed'] as bool;
+          final isMandatory = clause['isMandatory'] == true;
           final ctrl = clause['controller'] as TextEditingController;
 
           return Container(
@@ -1324,12 +1530,12 @@ class _ApplyScreenState extends State<ApplyScreen> {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isAgreed ? AppColors.border : const Color(0xFFF59E0B).withValues(alpha: 0.6),
+                color: isAgreed ? AppColors.border : AppColors.electricBlue,
                 width: isAgreed ? 1 : 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.03),
+                  color: isAgreed ? AppColors.primary.withValues(alpha: 0.03) : AppColors.electricBlue.withValues(alpha: 0.06),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -1344,10 +1550,20 @@ class _ApplyScreenState extends State<ApplyScreen> {
                     InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () {
+                        if (isMandatory) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('This is a required platform compliance rule.'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          return;
+                        }
                         HapticFeedback.selectionClick();
                         setState(() {
                           clause['agreed'] = !isAgreed;
                         });
+                        _saveDraft();
                       },
                       child: Container(
                         width: 26,
@@ -1356,7 +1572,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
                           color: isAgreed ? AppColors.primary : Colors.white,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: isAgreed ? AppColors.primary : AppColors.steel,
+                            color: isAgreed ? AppColors.primary : AppColors.electricBlue,
                             width: 1.8,
                           ),
                         ),
@@ -1376,18 +1592,25 @@ class _ApplyScreenState extends State<ApplyScreen> {
                                   style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                 decoration: BoxDecoration(
-                                  color: isAgreed ? AppColors.successSoft : const Color(0xFFFEF3C7),
+                                  color: (isMandatory || isAgreed)
+                                      ? AppColors.accentSoft
+                                      : AppColors.primary,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  isAgreed ? 'Standard' : 'Counter-Offer',
+                                  isMandatory
+                                      ? 'Required'
+                                      : (isAgreed ? 'Standard' : 'Counter-Offer'),
                                   style: TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w800,
-                                    color: isAgreed ? AppColors.success : const Color(0xFFB45309),
+                                    color: (isMandatory || isAgreed)
+                                        ? AppColors.electricBlue
+                                        : Colors.white,
                                   ),
                                 ),
                               ),
@@ -1410,20 +1633,23 @@ class _ApplyScreenState extends State<ApplyScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
+                      color: AppColors.bg,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFDE68A)),
+                      border: Border.all(color: AppColors.electricBlue.withValues(alpha: 0.25)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFFB45309)),
-                            SizedBox(width: 6),
-                            Text(
-                              'Propose Your Counter-Terms / Custom Request:',
-                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF92400E)),
+                            const Icon(Icons.edit_note_rounded, size: 16, color: AppColors.electricBlue),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Propose Counter-Terms / Custom Request:',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
@@ -1432,6 +1658,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
                           controller: ctrl,
                           maxLines: 2,
                           style: const TextStyle(fontSize: 12.5, color: AppColors.ink900),
+                          onChanged: (_) => _saveDraft(),
                           decoration: InputDecoration(
                             isDense: true,
                             hintText: clause['defaultCounterPlaceholder'] as String? ?? 'Specify your requested terms...',
@@ -1440,15 +1667,15 @@ class _ApplyScreenState extends State<ApplyScreen> {
                             filled: true,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFFCD34D)),
+                              borderSide: const BorderSide(color: AppColors.border),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFFCD34D)),
+                              borderSide: const BorderSide(color: AppColors.border),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                              borderSide: const BorderSide(color: AppColors.electricBlue, width: 1.5),
                             ),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                           ),

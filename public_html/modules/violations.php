@@ -7,7 +7,15 @@
 $lessorId = $user['id'];
 $error = '';
 
-$CATEGORIES = ['Noise Complaint', 'Improper Waste Disposal', 'Late Operating Hours', 'Unauthorized Modifications', 'Lease Violation', 'Safety Violation'];
+$CATEGORIES = [
+    'Unpaid Rent Default (Past Due)',
+    'Noise Complaint',
+    'Improper Waste Disposal',
+    'Late Operating Hours',
+    'Unauthorized Modifications',
+    'Lease Violation',
+    'Safety Violation',
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['issue_violation'])) {
     csrf_check();

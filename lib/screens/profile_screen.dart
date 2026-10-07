@@ -5,6 +5,8 @@ import '../services/theme_service.dart';
 import 'login_screen.dart';
 import 'lease_contract_screen.dart';
 import 'violation_notice_sheet.dart';
+import 'receipts_history_screen.dart';
+import 'payment_arrangement_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Map<String, dynamic>? lease;
@@ -27,6 +29,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _leaseData;
   int _demoStrike = 0;
   String _demoPlan = 'none';
+  String _demoRentStatus = 'normal';
+  String _demoStrikeCategory = 'past_due';
 
   @override
   void initState() {
@@ -46,11 +50,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name = await ApiService.getUserName();
     final strike = await ApiService.getDemoStrikeLevel();
     final plan = await ApiService.getDemoRestructuringPlan();
+    final rentStatus = await ApiService.getDemoRentStatus();
+    final strikeCat = await ApiService.getDemoStrikeCategory();
     if (mounted) {
       setState(() {
         if (name != null && name.isNotEmpty) _name = name;
         _demoStrike = strike;
         _demoPlan = plan;
+        _demoRentStatus = rentStatus;
+        _demoStrikeCategory = strikeCat;
       });
     }
     if (widget.lease != null) {
@@ -293,12 +301,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildMenuItem(
                   icon: Icons.receipt_long_outlined,
                   title: 'Payment History',
-                  onTap: () => _showComingSoon('Payment History'),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptsHistoryScreen(
+                          lease: widget.lease ?? {},
+                          rentAmount: (widget.lease?['monthly_rent'] as num?)?.toDouble() ?? 12000.0,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuItem(
                   icon: Icons.description_outlined,
                   title: 'Receipts',
-                  onTap: () => _showComingSoon('Receipts'),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptsHistoryScreen(
+                          lease: widget.lease ?? {},
+                          rentAmount: (widget.lease?['monthly_rent'] as num?)?.toDouble() ?? 12000.0,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ]),
 
@@ -309,6 +337,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildSectionGroup([
                 _buildStandingMenuItem(),
                 _buildMenuItem(
+                  icon: Icons.handshake_outlined,
+                  title: 'Restructuring & Relief Policy',
+                  onTap: _showRestructuringPolicyModal,
+                ),
+                _buildMenuItem(
+                  icon: Icons.gavel_rounded,
+                  title: 'Violations & 3-Strike Policy',
+                  onTap: _showViolationsPolicyModal,
+                ),
+                _buildMenuItem(
                   icon: Icons.assignment_outlined,
                   title: 'Lease Agreement',
                   onTap: () {
@@ -318,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                 ),
                 _buildMenuItem(
-                  icon: Icons.gavel_outlined,
+                  icon: Icons.description_outlined,
                   title: 'Contract Guidelines',
                   onTap: () {
                     Navigator.of(context).push(
@@ -643,6 +681,370 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showRestructuringPolicyModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.handshake_outlined, color: AppColors.electricBlue, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rent Restructuring Policy',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : AppColors.midnightNavy,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Commercial payment relief guidelines & terms',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF262626) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '1. Purpose & Eligibility',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Commercial tenants experiencing temporary cash-flow difficulty may formally request a relief plan via the app to avoid default. Requires an active lease with no unresolved Strike 2 or 3 breaches.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '2. Available Installment Plans',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '• 2-Payment Split: 50% due on scheduled due date; 50% due on the 15th of next month.\n• 3-Payment Split: 33.3% Part 1, 33.3% on Day 15, and 33.3% on Day 30.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.45),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '3. Late Fee Freeze on Deferred Part',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Once approved by the lessor, standard late fees (₱500) and default escalation are frozen on the deferred portion, provided installments are paid on time.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Breach Policy: If any scheduled installment is missed past its deadline, the relief plan is immediately revoked, the balance accelerates, and an automatic Strike 1 Payment Default violation is issued.',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF991B1B), height: 1.35, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (_leaseData != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentArrangementScreen(
+                              lease: _leaseData!,
+                              onArrangementSubmitted: () => _loadProfile(),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add_task_rounded, size: 18),
+                      label: const Text('Apply for Restructuring Plan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showViolationsPolicyModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.gavel_rounded, color: Color(0xFFDC2626), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Violations & 3-Strike Disciplinary Policy',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : AppColors.midnightNavy,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Commercial lease compliance & legal escalation ladder',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 3 Strikes Ladder Box
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF262626) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'The 3-Strike Escalation Ladder',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildStrikeExplainer(
+                        number: '1',
+                        title: 'Strike 1: Official Notice to Comply',
+                        desc: 'Formal citation logged with 5–7 calendar days cure period. Standard late fee applied.',
+                        color: const Color(0xFF0284C7),
+                        bgColor: const Color(0xFFEFF6FF),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStrikeExplainer(
+                        number: '2',
+                        title: 'Strike 2: Notice of Default & Citation Fine',
+                        desc: '₱500 citation penalty applied, formal demand letter issued, flagged for lease non-renewal.',
+                        color: const Color(0xFFD97706),
+                        bgColor: const Color(0xFFFEF3C7),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStrikeExplainer(
+                        number: '3',
+                        title: 'Strike 3: Material Breach & Eviction',
+                        desc: 'Formal Notice to Vacate served, contract cancelled, deposit forfeited, eviction proceedings initiated.',
+                        color: const Color(0xFFDC2626),
+                        bgColor: const Color(0xFFFEF2F2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Violation Categories
+                const Text(
+                  'Tracked Violation Categories',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '• Unpaid Rent Default: Beyond 7-day grace period or broken restructuring installment.\n• Unauthorized Alterations: Structural modifications or drilling without consent.\n• Unauthorized Subleasing: Subletting space to third parties.\n• Use & Nuisance: Hazardous storage, walkway obstruction, or noise breaches.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.45),
+                ),
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _openLeaseStanding();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0A1832),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: const Text('View Current Lease Standing', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStrikeExplainer({
+    required String number,
+    required String title,
+    required String desc,
+    required Color color,
+    required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+            alignment: Alignment.center,
+            child: Text(
+              number,
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  desc,
+                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDemoSection() {
     return SliverToBoxAdapter(
       child: Padding(
@@ -692,32 +1094,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Select a strike stage below, then navigate to Home to experience the live escalation gate.',
                 style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.35),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
+              // Infraction Theme Toggle
+              Row(
+                children: [
+                  _buildStrikeCategoryTab('past_due', 'Rent Past Due Default', Icons.receipt_long_rounded),
+                  const SizedBox(width: 8),
+                  _buildStrikeCategoryTab('property', 'Property Violations', Icons.shield_outlined),
+                ],
+              ),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
                   _buildScenarioChip(
                     level: 0,
-                    label: '0: Clean Tenant',
+                    label: _demoStrikeCategory == 'past_due' ? '0: Clean (No Arrears)' : '0: Clean Tenant',
                     color: AppColors.success,
                     icon: Icons.check_circle_rounded,
                   ),
                   _buildScenarioChip(
                     level: 1,
-                    label: 'Strike 1: Warning',
+                    label: _demoStrikeCategory == 'past_due' ? 'Strike 1: Past Due Warning' : 'Strike 1: Warning',
                     color: const Color(0xFF0284C7),
                     icon: Icons.info_outline_rounded,
                   ),
                   _buildScenarioChip(
                     level: 2,
-                    label: 'Strike 2: Fined (₱500)',
+                    label: _demoStrikeCategory == 'past_due' ? 'Strike 2: Past Due (₱500 Fine)' : 'Strike 2: Fined (₱500)',
                     color: const Color(0xFF1E6BFF),
                     icon: Icons.receipt_long_rounded,
                   ),
                   _buildScenarioChip(
                     level: 3,
-                    label: 'Strike 3: Eviction',
+                    label: _demoStrikeCategory == 'past_due' ? 'Strike 3: Chronic Arrears (Evict)' : 'Strike 3: Eviction',
                     color: AppColors.error,
                     icon: Icons.gavel_rounded,
                   ),
@@ -795,8 +1206,167 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 18),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 14),
+
+              // 7-Day Grace Period & Arrears Simulator
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.timer_outlined, size: 16, color: Color(0xFFD97706)),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      '7-Day Grace & Overdue Simulator',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Test how the Luxury Rent Card shifts between Normal Due, Active 7-Day Grace, and Overdue 2-Month Arrears.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildRentStatusDemoChip(
+                    statusKey: 'normal',
+                    label: 'Normal: Due Oct 30 (₱12k)',
+                    color: AppColors.ink700,
+                    icon: Icons.calendar_today_rounded,
+                  ),
+                  _buildRentStatusDemoChip(
+                    statusKey: 'grace_period',
+                    label: 'Grace Period (5d left · ₱12k)',
+                    color: AppColors.electricBlue,
+                    icon: Icons.schedule_rounded,
+                  ),
+                  _buildRentStatusDemoChip(
+                    statusKey: 'overdue',
+                    label: 'OVERDUE: 2 Mos (₱24.5k)',
+                    color: AppColors.error,
+                    icon: Icons.error_outline_rounded,
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStrikeCategoryTab(String catKey, String label, IconData icon) {
+    final isSelected = _demoStrikeCategory == catKey;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () async {
+        await ApiService.setDemoStrikeCategory(catKey);
+        setState(() => _demoStrikeCategory = catKey);
+        widget.onLeaseMayHaveChanged?.call();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF102340) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? const Color(0xFF102340) : const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isSelected ? Colors.white : AppColors.ink700),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? Colors.white : AppColors.ink700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRentStatusDemoChip({
+    required String statusKey,
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    final isSelected = _demoRentStatus == statusKey;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        await ApiService.setDemoRentStatus(statusKey);
+        setState(() => _demoRentStatus = statusKey);
+        widget.onLeaseMayHaveChanged?.call();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Switched to: $label. Switch to Home tab to test!',
+                    style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : color.withValues(alpha: 0.3),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? Colors.white : color,
+              ),
+            ),
+          ],
         ),
       ),
     );

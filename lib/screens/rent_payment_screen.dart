@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import 'receipts_history_screen.dart';
 
 class RentPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> lease;
@@ -9,12 +10,15 @@ class RentPaymentScreen extends StatefulWidget {
   final Map<String, dynamic>? activeArrangement;
   final VoidCallback? onPaymentSubmitted;
 
+  final bool isOverdue;
+
   const RentPaymentScreen({
     super.key,
     required this.lease,
     required this.rentAmount,
     this.activeArrangement,
     this.onPaymentSubmitted,
+    this.isOverdue = false,
   });
 
   @override
@@ -26,7 +30,7 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
   final _refNoController = TextEditingController();
   final _noteController = TextEditingController();
 
-  String _selectedTarget = 'restructuring_plan';
+  String _selectedTarget = 'monthly_rent';
   XFile? _proofImage;
   bool _submitting = false;
   bool _loading = true;
@@ -52,7 +56,11 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
   }
 
   void _initInitialTargetAndAmount() {
-    if (_hasRestructuring) {
+    if (widget.isOverdue) {
+      _selectedTarget = 'overdue_october';
+      final octAmount = widget.rentAmount + 500;
+      _amountController.text = octAmount.toStringAsFixed(0);
+    } else if (_hasRestructuring) {
       _selectedTarget = 'restructuring_plan';
       _amountController.text = _splitAmount.toStringAsFixed(0);
     } else {
@@ -65,7 +73,11 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
     if (val == null) return;
     setState(() {
       _selectedTarget = val;
-      if (val == 'restructuring_plan') {
+      if (val == 'overdue_october') {
+        _amountController.text = (widget.rentAmount + 500).toStringAsFixed(0);
+      } else if (val == 'full_balance') {
+        _amountController.text = (widget.rentAmount * 2 + 500).toStringAsFixed(0);
+      } else if (val == 'restructuring_plan') {
         _amountController.text = _splitAmount.toStringAsFixed(0);
       } else if (val == 'monthly_rent') {
         _amountController.text = widget.rentAmount.toStringAsFixed(0);
@@ -160,6 +172,10 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
         referenceNo: ref.isNotEmpty ? ref : 'IMG-RECEIPT-${DateTime.now().millisecondsSinceEpoch % 10000}',
         note: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
       );
+
+      if (widget.isOverdue && (_selectedTarget == 'overdue_october' || _selectedTarget == 'full_balance')) {
+        await ApiService.setDemoRentStatus('normal');
+      }
 
       widget.onPaymentSubmitted?.call();
       await _fetchPaymentsHistory();
@@ -553,53 +569,66 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Payment Target Dropdown (if restructuring active)
-                  if (_hasRestructuring) ...[
+                  // Payment Target Options (Overdue Arrears or Restructuring)
+                  if (widget.isOverdue) ...[
+                    const Text(
+                      'Select Payment Target (Oldest Debt First)',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink700),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPaymentOptionCard(
+                      value: 'overdue_october',
+                      title: 'Option 1: Pay Overdue Month (October First)',
+                      amountText: '₱${_formatMoney(widget.rentAmount + 500)}',
+                      badgeText: 'Priority Target · Clears Overdue & Strike',
+                      badgeColor: const Color(0xFFFEF2F2),
+                      badgeTextColor: const Color(0xFFDC2626),
+                      description: 'Settles the oldest missed due date (October) first to immediately clear overdue default status and remove lease strikes.',
+                    ),
+                    _buildPaymentOptionCard(
+                      value: 'full_balance',
+                      title: 'Option 2: Pay Full Balance (October + November)',
+                      amountText: '₱${_formatMoney(widget.rentAmount * 2 + 500)}',
+                      badgeText: 'Full 2-Month Settlement',
+                      badgeColor: const Color(0xFFEFF6FF),
+                      badgeTextColor: AppColors.electricBlue,
+                      description: 'Settles both October overdue arrears and November advance rent together in full.',
+                    ),
+                    const SizedBox(height: 12),
+                  ] else if (_hasRestructuring) ...[
                     const Text(
                       'Select Payment Target',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink700),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedTarget,
-                          isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.ink500),
-                          items: [
-                            DropdownMenuItem(
-                              value: 'restructuring_plan',
-                              child: Text(
-                                'Restructuring Plan (₱${_formatMoney(_splitAmount)})',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'monthly_rent',
-                              child: Text(
-                                'Monthly Rent (₱${_formatMoney(widget.rentAmount)})',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'both',
-                              child: Text(
-                                'Both: Full Settlement (₱${_formatMoney(widget.rentAmount + _splitAmount)})',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink900),
-                              ),
-                            ),
-                          ],
-                          onChanged: _onTargetChanged,
-                        ),
-                      ),
+                    const SizedBox(height: 8),
+                    _buildPaymentOptionCard(
+                      value: 'restructuring_plan',
+                      title: 'Option 1: Restructuring Plan Installment',
+                      amountText: '₱${_formatMoney(_splitAmount)}',
+                      badgeText: 'Payment Relief Plan',
+                      badgeColor: const Color(0xFFEFF6FF),
+                      badgeTextColor: AppColors.electricBlue,
+                      description: 'Pay the agreed restructuring installment split for this period.',
                     ),
-                    const SizedBox(height: 16),
+                    _buildPaymentOptionCard(
+                      value: 'monthly_rent',
+                      title: 'Option 2: Regular Monthly Rent',
+                      amountText: '₱${_formatMoney(widget.rentAmount)}',
+                      badgeText: 'Standard Rent',
+                      badgeColor: const Color(0xFFF1F5F9),
+                      badgeTextColor: AppColors.ink700,
+                      description: 'Pay standard monthly rent for the current billing cycle.',
+                    ),
+                    _buildPaymentOptionCard(
+                      value: 'both',
+                      title: 'Option 3: Full Settlement (Both)',
+                      amountText: '₱${_formatMoney(widget.rentAmount + _splitAmount)}',
+                      badgeText: 'Combined Total',
+                      badgeColor: const Color(0xFFECFDF5),
+                      badgeTextColor: const Color(0xFF059669),
+                      description: 'Clear both monthly rent and restructuring installment together in one transaction.',
+                    ),
+                    const SizedBox(height: 12),
                   ],
 
                   // Amount Input
@@ -778,9 +807,36 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
                     color: AppColors.midnightNavy,
                   ),
                 ),
-                Text(
-                  '${_paymentsHistory.length} logged',
-                  style: const TextStyle(fontSize: 11.5, color: AppColors.ink500),
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptsHistoryScreen(
+                          lease: widget.lease,
+                          rentAmount: widget.rentAmount,
+                        ),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      children: const [
+                        Text(
+                          'View Receipts',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.electricBlue,
+                          ),
+                        ),
+                        SizedBox(width: 2),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.electricBlue),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -817,17 +873,30 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
                 final paidAt = p['paid_at']?.toString() ?? '';
                 final note = p['note']?.toString() ?? '';
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+                return InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptsHistoryScreen(
+                          lease: widget.lease,
+                          rentAmount: widget.rentAmount,
+                        ),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -884,8 +953,9 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
                       ),
                     ],
                   ),
-                );
-              }),
+                ),
+              );
+            }),
 
             const SizedBox(height: 30),
           ],
@@ -893,5 +963,118 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
       ),
     ),
   );
-}
+  }
+
+  Widget _buildPaymentOptionCard({
+    required String value,
+    required String title,
+    required String amountText,
+    required String description,
+    String? badgeText,
+    Color? badgeColor,
+    Color? badgeTextColor,
+  }) {
+    final isSelected = _selectedTarget == value;
+    return InkWell(
+      onTap: () => _onTargetChanged(value),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.electricBlue : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.8 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.electricBlue.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 12),
+              child: Icon(
+                isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                size: 20,
+                color: isSelected ? AppColors.electricBlue : AppColors.ink400,
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected ? AppColors.midnightNavy : AppColors.ink900,
+                            height: 1.25,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        amountText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: isSelected ? AppColors.electricBlue : AppColors.midnightNavy,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (badgeText != null) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: badgeTextColor ?? AppColors.electricBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? const Color(0xFF334155) : AppColors.ink500,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
