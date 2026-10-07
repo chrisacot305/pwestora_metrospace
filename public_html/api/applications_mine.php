@@ -14,15 +14,13 @@ $lessee = require_lessee_auth($pdo);
 
 try {
     $stmt = $pdo->prepare(
-        "SELECT a.id, a.property_id, a.lessor_id, a.tenant_name, a.business_name, 
-                a.term_months, a.rent, a.status, a.submitted_at,
+        "SELECT a.id, a.term_months, a.rent, a.status, a.submitted_at,
                 a.checklist_negotiation, a.lessor_rebuttal, a.rebuttal_at,
                 a.valid_id_path, a.sec_dti_path, a.business_permit_path, a.bir_cert_path,
-                COALESCE(p.name, 'Commercial Space') AS property_name, 
-                COALESCE(u.company_name, u.full_name, 'Property Lessor') AS lessor_name
+                p.name AS property_name, u.company_name AS lessor_name
          FROM applications a
-         LEFT JOIN properties p ON p.id = a.property_id
-         LEFT JOIN users u ON u.id = a.lessor_id
+         JOIN properties p ON p.id = a.property_id
+         JOIN users u ON u.id = a.lessor_id
          WHERE a.lessee_id = ?
          ORDER BY a.submitted_at DESC"
     );
@@ -30,13 +28,11 @@ try {
     $applications = $stmt->fetchAll();
 } catch (Throwable $e) {
     $stmt = $pdo->prepare(
-        "SELECT a.id, a.property_id, a.lessor_id, a.tenant_name, a.business_name,
-                a.term_months, a.rent, a.status, a.submitted_at,
-                COALESCE(p.name, 'Commercial Space') AS property_name, 
-                COALESCE(u.company_name, u.full_name, 'Property Lessor') AS lessor_name
+        "SELECT a.id, a.term_months, a.rent, a.status, a.submitted_at,
+                p.name AS property_name, u.company_name AS lessor_name
          FROM applications a
-         LEFT JOIN properties p ON p.id = a.property_id
-         LEFT JOIN users u ON u.id = a.lessor_id
+         JOIN properties p ON p.id = a.property_id
+         JOIN users u ON u.id = a.lessor_id
          WHERE a.lessee_id = ?
          ORDER BY a.submitted_at DESC"
     );

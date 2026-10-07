@@ -22,6 +22,10 @@ if ($user['role'] === 'lessor') {
     $countStmt = $pdo->prepare('SELECT COUNT(*) FROM notification_recipients WHERE user_id = ? AND read_at IS NULL');
     $countStmt->execute([$user['id']]);
     $unreadCount = (int) $countStmt->fetchColumn();
+
+    $pendingPaymentsStmt = $pdo->prepare("SELECT COUNT(*) FROM payments WHERE lessor_id = ? AND (logged_by IS NULL OR note LIKE '[PENDING]%') AND (note NOT LIKE '[DECLINED%')");
+    $pendingPaymentsStmt->execute([$user['id']]);
+    $pendingPaymentsCount = (int) $pendingPaymentsStmt->fetchColumn();
 }
 ?>
 <!DOCTYPE html>
@@ -46,7 +50,10 @@ if ($user['role'] === 'lessor') {
       <?php foreach ($nav as $item): ?>
         <a class="nav-item <?= $page === $item['id'] ? 'active' : '' ?>"
            href="/dashboard.php?page=<?= $item['id'] ?>">
-          <i class="bi <?= $item['icon'] ?>"></i> <?= $item['label'] ?>
+          <i class="bi <?= $item['icon'] ?>"></i> <span><?= $item['label'] ?></span>
+          <?php if ($item['id'] === 'payments' && !empty($pendingPaymentsCount)): ?>
+            <span class="badge badge-pending" style="margin-left:auto; font-size:11px; padding:2px 7px;"><?= $pendingPaymentsCount ?></span>
+          <?php endif; ?>
         </a>
       <?php endforeach; ?>
     </nav>

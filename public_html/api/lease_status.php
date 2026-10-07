@@ -19,8 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $lessee = require_lessee_auth($pdo);
 
 $stmt = $pdo->prepare(
-    "SELECT t.id AS tenant_id, t.created_at AS since, t.unit_label,
+    "SELECT t.id AS tenant_id, t.created_at AS since,
             p.name AS property_name, p.address AS property_address, p.type AS property_type,
+            (SELECT photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo,
             u.company_name AS lessor_name,
             a.rent, a.term_months
      FROM tenants t
@@ -40,9 +41,13 @@ if (!$lease) {
 
 $lease['rent'] = (float) ($lease['rent'] ?? 0);
 $lease['term_months'] = (int) ($lease['term_months'] ?? 0);
+if (!empty($lease['cover_photo'])) {
+    $lease['cover_photo'] = APP_URL . '/' . ltrim($lease['cover_photo'], '/');
+}
 
 $ticketStmt = $pdo->prepare('SELECT COUNT(*) FROM maintenance_tickets WHERE tenant_id = ? AND stage < 7');
 $ticketStmt->execute([$lease['tenant_id']]);
 $lease['open_tickets'] = (int) $ticketStmt->fetchColumn();
 
 json_ok(['has_lease' => true, 'lease' => $lease]);
+

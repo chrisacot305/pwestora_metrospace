@@ -38,15 +38,52 @@ $openTicketRows = $pdo->prepare(
 );
 $openTicketRows->execute([$lessorId]);
 $openTicketRows = $openTicketRows->fetchAll();
+
+$pendingPaymentsStmt = $pdo->prepare(
+    "SELECT p.*, t.tenant_name FROM payments p
+     JOIN tenants t ON t.id = p.tenant_id
+     WHERE p.lessor_id = ? AND (p.logged_by IS NULL OR p.note LIKE '[PENDING]%') AND (p.note NOT LIKE '[DECLINED%')
+     ORDER BY p.id DESC"
+);
+$pendingPaymentsStmt->execute([$lessorId]);
+$pendingPayments = $pendingPaymentsStmt->fetchAll();
+$pendingPaymentsCount = count($pendingPayments);
+$pendingPaymentsTotal = array_sum(array_column($pendingPayments, 'amount'));
 ?>
 <h2 style="margin:0 0 4px;">Dashboard</h2>
 <p style="color:var(--ink-500); margin:0 0 20px;">Portfolio overview across your branches.</p>
 
+<?php if ($pendingPaymentsCount > 0): ?>
+  <div class="card" style="margin-bottom:20px; border-left:4px solid var(--primary); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; background:linear-gradient(90deg, #FFFFFF, var(--accent-soft));">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="width:42px; height:42px; border-radius:10px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px;">
+        <i class="bi bi-qr-code-scan"></i>
+      </div>
+      <div>
+        <p style="margin:0; font-weight:700; font-size:14px; color:var(--primary);">
+          <?= $pendingPaymentsCount ?> Tenant Payment<?= $pendingPaymentsCount > 1 ? 's' : '' ?> Awaiting Verification (₱<?= number_format($pendingPaymentsTotal, 2) ?>)
+        </p>
+        <p style="margin:2px 0 0; font-size:12.5px; color:var(--ink-500);">
+          Transfers submitted via InstaPay QR code require your receipt confirmation to update the tenant ledger.
+        </p>
+      </div>
+    </div>
+    <a href="/dashboard.php?page=payments" class="btn btn-primary" style="width:auto; padding:9px 18px; font-size:13px; font-weight:700;">
+      Review Payments <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+<?php endif; ?>
+
 <div class="kpi-grid">
   <div class="card"><div class="kpi-label">Active Leases</div><div class="kpi-value"><?= $activeLeases ?></div></div>
+  <div class="card">
+    <div class="kpi-label">Pending Payments</div>
+    <div class="kpi-value" style="<?= $pendingPaymentsCount > 0 ? 'color:var(--primary);' : '' ?>">
+      <?= $pendingPaymentsCount ?>
+    </div>
+  </div>
   <div class="card"><div class="kpi-label">Pending Applications</div><div class="kpi-value"><?= $pendingApps ?></div></div>
   <div class="card"><div class="kpi-label">Open Maintenance</div><div class="kpi-value"><?= $openTickets ?></div></div>
-  <div class="card"><div class="kpi-label">Open Violations</div><div class="kpi-value"><?= $openViolations ?></div></div>
 </div>
 
 <div class="two-col">

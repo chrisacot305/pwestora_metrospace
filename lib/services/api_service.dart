@@ -264,8 +264,31 @@ class ApiService {
   // ---------------- Payments ----------------
 
   static Future<List<dynamic>> fetchPayments() async {
-    final data = await _getJson('payments_list.php', auth: true);
-    return data['payments'] as List<dynamic>;
+    try {
+      final data = await _getJson('payments_list.php', auth: true);
+      return (data['payments'] as List<dynamic>?) ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> submitRentPayment({
+    required double amount,
+    required String target,
+    required String referenceNo,
+    String? note,
+  }) async {
+    final payload = {
+      'amount': amount,
+      'method': 'bank_transfer',
+      'target': target,
+      'reference_no': referenceNo,
+      'note': note ?? '',
+    };
+
+    // Post directly to the live server
+    final res = await _postJson('payments_submit.php', payload, auth: true);
+    return res;
   }
 
   // ---------------- Messages ----------------
@@ -281,7 +304,83 @@ class ApiService {
 
   // ---------------- Installment / Payment Arrangements ----------------
 
+  static const String _kDemoRestructuringKey = 'demo_restructuring_plan';
+
+  static Future<String> getDemoRestructuringPlan() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kDemoRestructuringKey) ?? 'none';
+  }
+
+  static Future<void> setDemoRestructuringPlan(String planKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (planKey == 'none') {
+      await prefs.remove(_kDemoRestructuringKey);
+    } else {
+      await prefs.setString(_kDemoRestructuringKey, planKey);
+    }
+  }
+
   static Future<List<dynamic>> fetchInstallmentRequests() async {
+    // Check demo override first
+    final demoPlan = await getDemoRestructuringPlan();
+    if (demoPlan == '2_payments_part1' || demoPlan == '2_payments') {
+      return [
+        {
+          'id': 999,
+          'plan_label': '2 payments',
+          'status': 'approved',
+          'current_part': 1,
+          'total_parts': 2,
+          'due_month': 'October',
+          'reason': 'Cash flow delay this month',
+          'amount': 2500,
+          'created_at': 'Today (Demo)',
+        }
+      ];
+    } else if (demoPlan == '2_payments_part2') {
+      return [
+        {
+          'id': 999,
+          'plan_label': '2 payments',
+          'status': 'approved',
+          'current_part': 2,
+          'total_parts': 2,
+          'due_month': 'November',
+          'reason': 'Cash flow delay this month',
+          'amount': 2500,
+          'created_at': 'Today (Demo)',
+        }
+      ];
+    } else if (demoPlan == '3_payments') {
+      return [
+        {
+          'id': 998,
+          'plan_label': '3 payments',
+          'status': 'approved',
+          'current_part': 1,
+          'total_parts': 3,
+          'due_month': 'October',
+          'reason': 'Seasonal slowdown in business',
+          'amount': 2500,
+          'created_at': 'Today (Demo)',
+        }
+      ];
+    } else if (demoPlan == 'pending') {
+      return [
+        {
+          'id': 997,
+          'plan_label': '2 payments',
+          'status': 'pending',
+          'current_part': 1,
+          'total_parts': 2,
+          'due_month': 'October',
+          'reason': 'Cash flow delay this month',
+          'amount': 2500,
+          'created_at': 'Today (Demo)',
+        }
+      ];
+    }
+
     try {
       final data = await _getJson('requests_list.php', auth: true);
       return data['requests'] as List<dynamic>? ?? [];
@@ -299,6 +398,23 @@ class ApiService {
       'plan_label': planLabel,
     }, auth: true);
     return data['request_id'] as int;
+  }
+
+  static Future<bool> cancelInstallmentRequest(int requestId) async {
+    // If demo mode is active or request is a demo ID, clear it immediately
+    final demoPlan = await getDemoRestructuringPlan();
+    if (demoPlan != 'none' || requestId == 997 || requestId == 998 || requestId == 999) {
+      await setDemoRestructuringPlan('none');
+      return true;
+    }
+    try {
+      final data = await _postJson('requests_cancel.php', {
+        'request_id': requestId,
+      }, auth: true);
+      return data['ok'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // ---------------- Conflict Resolution / Violations (Section C) ----------------

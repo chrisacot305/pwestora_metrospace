@@ -5,6 +5,7 @@ import 'tickets_list_screen.dart';
 import 'ticket_detail_screen.dart';
 import 'browse_screen.dart';
 import 'payment_arrangement_screen.dart';
+import 'rent_payment_screen.dart';
 import 'violation_notice_sheet.dart';
 import '../widgets/luxury_rent_card.dart';
 
@@ -229,82 +230,110 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 14),
 
-              // ================= STACKED LUXURY RENT CARD =================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: LuxuryRentCard(
-                  rentAmount: rentAmount,
-                  dueDate: '30 $currentMonthName ${now.year}',
-                  tenantName: _userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'),
-                  onPayRent: () => _showPayRentSheet(rentAmount),
-                ),
-              ),
-
-              // Active Restructuring Plan Strip (if any)
+              // ================= STACKED LUXURY RENT CARD & RESTRUCTURING =================
               FutureBuilder<List<dynamic>>(
                 future: _arrangementsFuture,
                 builder: (context, snapshot) {
                   final reqs = snapshot.data ?? [];
-                  if (reqs.isEmpty) return const SizedBox.shrink();
-
-                  final latest = reqs.first as Map<String, dynamic>;
-                  final status = (latest['status'] ?? 'pending').toString().toLowerCase();
-                  final plan = latest['plan_label'] ?? '2 payments';
+                  final latest = reqs.isNotEmpty ? (reqs.first as Map<String, dynamic>) : null;
+                  final status = (latest?['status'] ?? '').toString().toLowerCase();
+                  final plan = latest?['plan_label'] ?? '2 payments';
                   final isApproved = status == 'approved';
                   final isPending = status == 'pending';
+                  final hasRestructuring = isApproved || isPending;
+                  final currentPart = (latest?['current_part'] as int?) ?? 1;
+                  final effectiveDueDate = hasRestructuring && isApproved && currentPart > 1
+                      ? '15 Nov ${now.year}'
+                      : '30 $currentMonthName ${now.year}';
 
-                  if (!isApproved && !isPending) return const SizedBox.shrink();
-
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => PaymentArrangementScreen(
-                              lease: widget.lease,
-                              onArrangementSubmitted: () => _refresh(),
-                            ),
-                          ),
-                        ).then((_) => _refresh());
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
-                              size: 15,
-                              color: isApproved ? const Color(0xFF10B981) : const Color(0xFFD97706),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                isApproved
-                                    ? 'Restructuring Active: $plan approved'
-                                    : 'Restructuring: $plan under lessor review',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: isApproved ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: LuxuryRentCard(
+                          rentAmount: rentAmount,
+                          dueDate: effectiveDueDate,
+                          tenantName: _userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'),
+                          activeArrangement: hasRestructuring ? latest : null,
+                          onArrangementTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PaymentArrangementScreen(
+                                  lease: widget.lease,
+                                  onArrangementSubmitted: () => _refresh(),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
-                          ],
+                            ).then((_) => _refresh());
+                          },
+                          onPayRent: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => RentPaymentScreen(
+                                  lease: widget.lease,
+                                  rentAmount: rentAmount,
+                                  activeArrangement: hasRestructuring ? latest : null,
+                                  onPaymentSubmitted: () => _refresh(),
+                                ),
+                              ),
+                            ).then((_) => _refresh());
+                          },
                         ),
                       ),
-                    ),
+
+                      // Active Restructuring Plan Strip (if any)
+                      if (hasRestructuring)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => PaymentArrangementScreen(
+                                    lease: widget.lease,
+                                    onArrangementSubmitted: () => _refresh(),
+                                  ),
+                                ),
+                              ).then((_) => _refresh());
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                                    size: 15,
+                                    color: isApproved ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      isApproved
+                                          ? 'Restructuring Active: $plan approved'
+                                          : 'Restructuring: $plan under lessor review',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isApproved ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -761,7 +790,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showPayRentSheet(double rentAmount) {
+  void _showPayRentSheet(double rentAmount, {String? reminderMessage}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -790,6 +819,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            if (reminderMessage != null) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: Color(0xFF1E6BFF), size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        reminderMessage,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E40AF),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

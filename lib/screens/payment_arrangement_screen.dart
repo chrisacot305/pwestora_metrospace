@@ -77,6 +77,63 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     }
   }
 
+  Future<void> _confirmCancelRequest(dynamic req) async {
+    final rawId = req['id'];
+    final reqId = rawId is int
+        ? rawId
+        : (rawId is num
+            ? rawId.toInt()
+            : int.tryParse(rawId?.toString() ?? '') ?? 0);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Cancel Restructuring Request?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0B1B3D)),
+        ),
+        content: const Text(
+          'Are you sure you want to cancel this pending restructuring request? Your payment schedule will return to standard monthly rent.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Request', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: const Text('Cancel Request', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _loading = true);
+      final success = await ApiService.cancelInstallmentRequest(reqId);
+      if (mounted) {
+        widget.onArrangementSubmitted?.call();
+        await _fetchRequests();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? 'Restructuring request cancelled successfully.' : 'Unable to cancel request.',
+            ),
+            backgroundColor: success ? const Color(0xFF0B1B3D) : AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   void _showSuccessModal() {
     showModalBottomSheet(
       context: context,
@@ -1021,6 +1078,36 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       color: Color(0xFF94A3B8),
                     ),
                   ),
+                if (status == 'pending') ...[
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () => _confirmCancelRequest(req),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.close_rounded, size: 12, color: Color(0xFFDC2626)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Cancel Request',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

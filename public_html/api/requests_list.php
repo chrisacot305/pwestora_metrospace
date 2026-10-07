@@ -28,6 +28,7 @@ $stmt->execute([$tenantId]);
 $requests = $stmt->fetchAll();
 
 foreach ($requests as &$r) {
+    $r['id']     = (int) $r['id'];
     $r['amount'] = (float) $r['amount'];
 }
 

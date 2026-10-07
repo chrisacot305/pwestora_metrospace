@@ -80,6 +80,8 @@ class LuxuryRentCard extends StatelessWidget {
   final String dueDate;
   final String tenantName;
   final VoidCallback onPayRent;
+  final Map<String, dynamic>? activeArrangement;
+  final VoidCallback? onArrangementTap;
 
   const LuxuryRentCard({
     super.key,
@@ -87,6 +89,8 @@ class LuxuryRentCard extends StatelessWidget {
     required this.dueDate,
     required this.tenantName,
     required this.onPayRent,
+    this.activeArrangement,
+    this.onArrangementTap,
   });
 
   String _formatMoney(num val) {
@@ -108,6 +112,18 @@ class LuxuryRentCard extends StatelessWidget {
     const notchWidth = 126.0;
     const notchHeight = 48.0;
 
+    final status = (activeArrangement?['status'] ?? '').toString().toLowerCase();
+    final planLabel = (activeArrangement?['plan_label'] ?? '').toString();
+    final isApproved = status == 'approved';
+    final isPending = status == 'pending';
+    final hasRestructuring = isApproved || isPending;
+
+    final numParts = planLabel.contains('3') ? 3 : 2;
+    final splitAmount = rentAmount / numParts;
+    final currentPart = (activeArrangement?['current_part'] as int?) ?? 1;
+    final dueMonth = (activeArrangement?['due_month'] as String?) ?? 'October';
+    final isPart1 = hasRestructuring && isApproved && currentPart == 1;
+
     return SizedBox(
       height: totalHeight,
       width: double.infinity,
@@ -115,7 +131,6 @@ class LuxuryRentCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           // ================= 1. BACK CARD: ROYAL SLATE & ELECTRIC ACCENT =================
-          // Only sits at the top (height: 100px). Completely hidden below front card.
           Positioned(
             top: 0,
             left: 10,
@@ -148,7 +163,6 @@ class LuxuryRentCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Two sleek minimalist overlapping circles (subtle fintech accent)
                   SizedBox(
                     width: 24,
                     height: 14,
@@ -216,36 +230,72 @@ class LuxuryRentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top Row: Pwestora Logo & Brand Name (Zero card numbers)
+                    // Top Row: Pwestora Logo + Brand Name (and small, subtle Due Date when restructuring)
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Image.asset(
-                          'img/Frame 2.png',
-                          width: 20,
-                          height: 20,
-                          color: Colors.white,
-                          fit: BoxFit.contain,
+                        Row(
+                          children: [
+                            Image.asset(
+                              'img/Frame 2.png',
+                              width: 20,
+                              height: 20,
+                              color: Colors.white,
+                              fit: BoxFit.contain,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Pwestora',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Pwestora',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.3,
+
+                        // When in Restructuring Plan: small, subtle Due Date at top-right (no oval background, not full-looking)
+                        if (hasRestructuring)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Due Date',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withValues(alpha: 0.60),
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                dueDate,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.90),
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
                       ],
                     ),
 
                     const Spacer(),
 
-                    // Metrics Row: Balance / Monthly Rent & Due Date
+                    // Metrics Row: Left is Monthly Rent, Beside it (Right) is Restructuring Plan (or Due Date if no plan)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Left Side: Monthly Rent
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -253,49 +303,115 @@ class LuxuryRentCard extends StatelessWidget {
                               'Monthly Rent',
                               style: TextStyle(
                                 fontSize: 11.5,
+                                height: 1.2,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white.withValues(alpha: 0.7),
+                                color: isPart1
+                                    ? Colors.white.withValues(alpha: 0.35)
+                                    : Colors.white.withValues(alpha: 0.75),
                                 letterSpacing: 0.1,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             Text(
                               '₱${_formatMoney(rentAmount)}',
-                              style: const TextStyle(
-                                fontSize: 32,
+                              style: TextStyle(
+                                fontSize: hasRestructuring ? 26 : 32,
+                                height: 1.1,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: -1.0,
+                                color: isPart1
+                                    ? Colors.white.withValues(alpha: 0.32)
+                                    : Colors.white,
+                                letterSpacing: hasRestructuring ? -0.6 : -1.0,
                               ),
                             ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
+                            if (hasRestructuring) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                'Due Date',
+                                isPart1 ? 'Deferred (Part 1)' : 'Active Due',
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                dueDate,
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: -0.2,
+                                  fontSize: 10.5,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w500,
+                                  color: isPart1
+                                      ? Colors.white.withValues(alpha: 0.30)
+                                      : Colors.white.withValues(alpha: 0.65),
                                 ),
                               ),
                             ],
-                          ),
+                          ],
                         ),
+
+                        // Right Side: Beside Monthly Rent is Restructuring Plan (or Due Date if no plan)
+                        if (hasRestructuring)
+                          InkWell(
+                            onTap: onArrangementTap,
+                            borderRadius: BorderRadius.circular(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Restructuring Plan',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    height: 1.2,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '₱${_formatMoney(splitAmount)}',
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -0.6,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isApproved
+                                      ? (isPart1 ? 'Next due — $dueMonth' : 'Final installment')
+                                      : 'Next due — $dueMonth (Pending)',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    height: 1.2,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Due Date',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  dueDate,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
 
@@ -361,16 +477,16 @@ class LuxuryRentCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.add_rounded,
                         color: Colors.white,
                         size: 15,
                       ),
-                      SizedBox(width: 4),
-                      Text(
+                      const SizedBox(width: 4),
+                      const Text(
                         'Pay Rent',
                         style: TextStyle(
                           fontSize: 13,

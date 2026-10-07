@@ -26,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _name = '';
   Map<String, dynamic>? _leaseData;
   int _demoStrike = 0;
+  String _demoPlan = 'none';
 
   @override
   void initState() {
@@ -44,10 +45,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfile() async {
     final name = await ApiService.getUserName();
     final strike = await ApiService.getDemoStrikeLevel();
+    final plan = await ApiService.getDemoRestructuringPlan();
     if (mounted) {
       setState(() {
         if (name != null && name.isNotEmpty) _name = name;
         _demoStrike = strike;
+        _demoPlan = plan;
       });
     }
     if (widget.lease != null) {
@@ -720,8 +723,144 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 18),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 14),
+
+              // Restructuring Plan Simulator
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.handshake_outlined, size: 16, color: Color(0xFF10B981)),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Restructuring Plan Simulator',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Test how the Luxury Rent Card shifts between standard rent and restructured installment modes.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildRestructuringDemoChip(
+                    planKey: 'none',
+                    label: 'None: Full Rent (₱2,500)',
+                    color: AppColors.ink700,
+                    icon: Icons.money_off_rounded,
+                  ),
+                  _buildRestructuringDemoChip(
+                    planKey: '2_payments_part1',
+                    label: '2-Part: Part 1 (₱2,500 Greyed)',
+                    color: const Color(0xFF1E6BFF),
+                    icon: Icons.filter_1_rounded,
+                  ),
+                  _buildRestructuringDemoChip(
+                    planKey: '2_payments_part2',
+                    label: '2-Part: Part 2 (₱2,500 Active)',
+                    color: const Color(0xFF10B981),
+                    icon: Icons.filter_2_rounded,
+                  ),
+                  _buildRestructuringDemoChip(
+                    planKey: '3_payments',
+                    label: '3-Part Plan (Active)',
+                    color: const Color(0xFF8B5CF6),
+                    icon: Icons.filter_3_rounded,
+                  ),
+                  _buildRestructuringDemoChip(
+                    planKey: 'pending',
+                    label: 'Pending Review',
+                    color: const Color(0xFFD97706),
+                    icon: Icons.hourglass_top_rounded,
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRestructuringDemoChip({
+    required String planKey,
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    final isSelected = _demoPlan == planKey;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        await ApiService.setDemoRestructuringPlan(planKey);
+        setState(() => _demoPlan = planKey);
+        widget.onLeaseMayHaveChanged?.call();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Switched to: $label. Switch to Home tab to test!',
+                    style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : color.withValues(alpha: 0.3),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? Colors.white : color,
+              ),
+            ),
+          ],
         ),
       ),
     );
