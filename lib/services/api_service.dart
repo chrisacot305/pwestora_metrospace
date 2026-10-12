@@ -23,7 +23,9 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_token', token);
     await prefs.setString('user_name', user['full_name'] ?? '');
+    await prefs.setString('company_name', user['company_name'] ?? '');
     await prefs.setString('user_email', user['email'] ?? '');
+    await prefs.setString('user_phone', user['phone'] ?? '');
   }
 
   static Future<String?> getToken() async {
@@ -36,11 +38,92 @@ class ApiService {
     return prefs.getString('user_name');
   }
 
+  static Future<String?> getCompanyName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('company_name');
+  }
+
+  static Future<String?> getUserEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('user_email');
+  }
+
+  static Future<String?> getUserPhone() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('user_phone');
+  }
+
+  static Future<Map<String, dynamic>> fetchUserProfile() async {
+    // 1. Try profile_me.php
+    try {
+      final res = await _getJson('profile_me.php', auth: true);
+      if (res['user'] != null) {
+        final u = res['user'] as Map<String, dynamic>;
+        final prefs = await SharedPreferences.getInstance();
+        if (u['full_name'] != null) await prefs.setString('user_name', u['full_name']);
+        if (u['company_name'] != null) await prefs.setString('company_name', u['company_name']);
+        if (u['email'] != null) await prefs.setString('user_email', u['email']);
+        if (u['phone'] != null) await prefs.setString('user_phone', u['phone']);
+        return u;
+      }
+    } catch (_) {}
+
+    // 2. Try lease_status.php
+    try {
+      final lRes = await _getJson('lease_status.php', auth: true);
+      if (lRes['user'] != null) {
+        final u = lRes['user'] as Map<String, dynamic>;
+        final prefs = await SharedPreferences.getInstance();
+        if (u['full_name'] != null) await prefs.setString('user_name', u['full_name']);
+        if (u['company_name'] != null) await prefs.setString('company_name', u['company_name']);
+        if (u['email'] != null) await prefs.setString('user_email', u['email']);
+        if (u['phone'] != null) await prefs.setString('user_phone', u['phone']);
+        return u;
+      }
+    } catch (_) {}
+
+    final name = await getUserName();
+    final company = await getCompanyName();
+    final email = await getUserEmail();
+    final phone = await getUserPhone();
+    return {
+      'full_name': name ?? '',
+      'company_name': company ?? '',
+      'email': email ?? '',
+      'phone': phone ?? '',
+    };
+  }
+
+  static Future<void> updateUserProfile({
+    required String fullName,
+    String? companyName,
+    required String email,
+    required String phone,
+  }) async {
+    try {
+      await _postJson('profile_update.php', {
+        'full_name': fullName,
+        if (companyName != null) 'company_name': companyName,
+        'email': email,
+        'phone': phone,
+      }, auth: true);
+    } catch (_) {
+      // Graceful fallback to local cache
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', fullName);
+    if (companyName != null) await prefs.setString('company_name', companyName);
+    await prefs.setString('user_email', email);
+    await prefs.setString('user_phone', phone);
+  }
+
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('api_token');
     await prefs.remove('user_name');
+    await prefs.remove('company_name');
     await prefs.remove('user_email');
+    await prefs.remove('user_phone');
   }
 
   // ---------------- Recently viewed (stored locally on-device) ----------------
@@ -102,8 +185,14 @@ class ApiService {
     try {
       data = jsonDecode(res.body) as Map<String, dynamic>;
     } catch (_) {
+      if (res.statusCode == 404) {
+        throw ApiException('API endpoint not found (404). Please verify that the PHP files are uploaded.');
+      }
+      if (res.statusCode >= 500) {
+        throw ApiException('Server error (${res.statusCode}). Please verify PHP files on your server.');
+      }
       throw ApiException(
-        'The server sent back something unexpected. Please try again.',
+        'Unexpected server response (${res.statusCode}). Please try again.',
       );
     }
     if (res.statusCode >= 200 && res.statusCode < 300 && data['ok'] == true) {
@@ -116,17 +205,29 @@ class ApiService {
 
   // ---------------- Auth ----------------
 
+  static Future<void> sendRegistrationOtp({
+    required String phone,
+    required String email,
+  }) async {
+    await _postJson('auth_send_otp.php', {
+      'phone': phone,
+      'email': email,
+    });
+  }
+
   static Future<void> register({
     required String fullName,
     required String email,
     required String phone,
     required String password,
+    required String otpCode,
   }) async {
     final data = await _postJson('auth_register.php', {
       'full_name': fullName,
       'email': email,
       'phone': phone,
       'password': password,
+      'otp_code': otpCode,
     });
     await saveSession(data['token'], data['user']);
   }
@@ -237,6 +338,13 @@ class ApiService {
   /// Returns null if no active lease, otherwise the lease details map.
   static Future<Map<String, dynamic>?> fetchLeaseStatus() async {
     final data = await _getJson('lease_status.php', auth: true);
+    if (data['user'] != null && data['user'] is Map) {
+      final u = data['user'] as Map<String, dynamic>;
+      final prefs = await SharedPreferences.getInstance();
+      if (u['full_name'] != null) await prefs.setString('user_name', u['full_name']);
+      if (u['email'] != null) await prefs.setString('user_email', u['email']);
+      if (u['phone'] != null) await prefs.setString('user_phone', u['phone']);
+    }
     if (data['has_lease'] != true) return null;
     return data['lease'] as Map<String, dynamic>;
   }

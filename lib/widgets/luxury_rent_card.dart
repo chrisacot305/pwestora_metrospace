@@ -79,6 +79,7 @@ class LuxuryRentCard extends StatelessWidget {
   final double rentAmount;
   final String dueDate;
   final String tenantName;
+  final String? propertyName;
   final VoidCallback onPayRent;
   final Map<String, dynamic>? activeArrangement;
   final VoidCallback? onArrangementTap;
@@ -92,6 +93,7 @@ class LuxuryRentCard extends StatelessWidget {
     required this.rentAmount,
     required this.dueDate,
     required this.tenantName,
+    this.propertyName,
     required this.onPayRent,
     this.activeArrangement,
     this.onArrangementTap,
@@ -501,31 +503,37 @@ class LuxuryRentCard extends StatelessWidget {
 
                     const SizedBox(height: 12),
 
-                    // Bottom Row: Tenant Name
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Tenant',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.65),
+                    // Bottom Row: Building / Property Name (constrained to never overlap the "+ Pay Rent" button)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 125), // Safe buffer before the '+ Pay Rent' floating pill button
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Building / Space',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withValues(alpha: 0.60),
+                              letterSpacing: 0.3,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          tenantName.isNotEmpty ? tenantName : 'Jake Peralta',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.2,
+                          const SizedBox(height: 2),
+                          Text(
+                            (propertyName != null && propertyName!.isNotEmpty)
+                                ? propertyName!
+                                : (tenantName.isNotEmpty ? tenantName : 'Commercial Space'),
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

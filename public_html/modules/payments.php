@@ -51,8 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     try {
         $check = $pdo->prepare(
-            'SELECT pay.*, t.tenant_name FROM payments pay
+            'SELECT pay.*, t.tenant_name, t.lessee_id, t.application_id, a.rent AS monthly_rent,
+                    u.phone AS lessee_phone, u.full_name AS lessee_full_name
+             FROM payments pay
              JOIN tenants t ON t.id = pay.tenant_id
+             LEFT JOIN applications a ON a.id = t.application_id
+             LEFT JOIN users u ON u.id = t.lessee_id
              WHERE pay.id = ? AND pay.lessor_id = ?'
         );
         $check->execute([$paymentId, $lessorId]);
@@ -73,6 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 'Confirmed Tenant Payment',
                 '₱' . number_format($pRow['amount'], 2) . ' from ' . $pRow['tenant_name']
             );
+
+            // ================= AUTOMATED SMS RECEIPT & COMPUTATION =================
+            require_once __DIR__ . '/../includes/payment_sms_helper.php';
+            send_payment_receipt_sms($pdo, $paymentId);
 
             header('Location: /dashboard.php?page=payments&msg=approved');
             exit;
@@ -147,10 +155,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_payment'])) {
         $error = 'Please fill in every field with a valid tenant, amount, method, and date.';
     } else {
         try {
-            $pdo->prepare(
+            $stmt = $pdo->prepare(
                 'INSERT INTO payments (tenant_id, lessor_id, amount, method, note, paid_at, logged_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$tenantId, $lessorId, $amount, $method, $note ?: null, $paidAt, $lessorId]);
+            );
+            $stmt->execute([$tenantId, $lessorId, $amount, $method, $note ?: null, $paidAt, $lessorId]);
+            $newPayId = (int) $pdo->lastInsertId();
+
+            require_once __DIR__ . '/../includes/payment_sms_helper.php';
+            send_payment_receipt_sms($pdo, $newPayId);
 
             audit_log($pdo, $lessorId, 'Logged rent payment', "₱$amount via {$METHODS[$method]} for {$tRow['tenant_name']}");
             header('Location: /dashboard.php?page=payments&msg=logged');

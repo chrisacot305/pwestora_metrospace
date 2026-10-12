@@ -20,6 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['req
             $newStatus = $action === 'approve' ? 'approved' : 'rejected';
             $pdo->prepare('UPDATE installment_requests SET status = ? WHERE id = ?')->execute([$newStatus, $reqId]);
             audit_log($pdo, $lessorId, ucfirst($newStatus) . ' installment plan', $reqRow['plan_label']);
+
+            try {
+                $tenantPhoneStmt = $pdo->prepare(
+                    'SELECT u.phone FROM tenants t JOIN users u ON u.id = t.lessee_id WHERE t.id = ?'
+                );
+                $tenantPhoneStmt->execute([$reqRow['tenant_id']]);
+                $lesseePhone = $tenantPhoneStmt->fetchColumn();
+                if (!empty($lesseePhone)) {
+                    require_once __DIR__ . '/../includes/sms.php';
+                    if ($newStatus === 'approved') {
+                        $planName = $reqRow['plan_label'] ?? 'Restructuring';
+                        $planAmt  = number_format((float) $reqRow['amount'], 2);
+                        send_sms($lesseePhone, "[Pwestora] Good news! Your restructuring arrangement request ($planName for ₱$planAmt) has been APPROVED by your lessor. You can now view your schedule and submit installment payments via the Pwestora app.");
+                    } else {
+                        send_sms($lesseePhone, "[Pwestora] Notice: Your restructuring arrangement request was declined by your lessor. Please check the Pwestora app or contact your lessor for details.");
+                    }
+                }
+            } catch (Throwable $smsEx) {
+                error_log('Installment decision SMS error: ' . $smsEx->getMessage());
+            }
         }
         header('Location: /dashboard.php?page=installments');
         exit;

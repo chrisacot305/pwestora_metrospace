@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
@@ -7,6 +8,7 @@ import 'lease_contract_screen.dart';
 import 'violation_notice_sheet.dart';
 import 'receipts_history_screen.dart';
 import 'payment_arrangement_screen.dart';
+import 'personal_info_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Map<String, dynamic>? lease;
@@ -26,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   String _name = '';
+  String _companyName = '';
   Map<String, dynamic>? _leaseData;
   int _demoStrike = 0;
   String _demoPlan = 'none';
@@ -48,6 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final name = await ApiService.getUserName();
+    final company = await ApiService.getCompanyName();
     final strike = await ApiService.getDemoStrikeLevel();
     final plan = await ApiService.getDemoRestructuringPlan();
     final rentStatus = await ApiService.getDemoRentStatus();
@@ -55,6 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) {
       setState(() {
         if (name != null && name.isNotEmpty) _name = name;
+        if (company != null && company.isNotEmpty) _companyName = company;
         _demoStrike = strike;
         _demoPlan = plan;
         _demoRentStatus = rentStatus;
@@ -117,14 +122,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _clearAppCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.cleaning_services_rounded, color: AppColors.electricBlue, size: 22),
+            SizedBox(width: 10),
+            Text('Clear Cache & Refresh', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: const Text(
+          'This will clear local temporary cached assets and reload fresh platform data to ensure you have the latest updates.',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.ink500)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Clear & Reload', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final userName = prefs.getString('user_name');
+    final userId = prefs.getInt('user_id');
+    final userRole = prefs.getString('user_role');
+    await prefs.clear();
+    if (token != null) await prefs.setString('auth_token', token);
+    if (userName != null) await prefs.setString('user_name', userName);
+    if (userId != null) await prefs.setInt('user_id', userId);
+    if (userRole != null) await prefs.setString('user_role', userRole);
+
+    await _loadProfile();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: AppColors.cyanGlow, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Cache cleared! App refreshed with the latest data.',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasLease = _leaseData != null;
-    final unit = hasLease
-        ? (_leaseData?['unit_label'] ?? 'Unit 302 • 3rd Floor')
-        : 'Applicant / Prospective Tenant';
-    final leaseNumber = 'Lease #LS-2026-${(_leaseData?['tenant_id'] ?? '032').toString().padLeft(3, '0')}';
+    final leaseCompany = _leaseData?['business_name']?.toString().trim() ?? '';
+    final effectiveCompany = _companyName.isNotEmpty
+        ? _companyName
+        : (leaseCompany.isNotEmpty ? leaseCompany : '');
+    final displayProfileTitle = effectiveCompany.isNotEmpty
+        ? effectiveCompany
+        : (_name.isNotEmpty ? _name : 'Pwestora User');
+    final displayProfileSub = effectiveCompany.isNotEmpty
+        ? _name
+        : (hasLease ? 'Commercial Space' : 'Applicant / Prospective Tenant');
+    final avatarLetter = displayProfileTitle.isNotEmpty
+        ? displayProfileTitle[0].toUpperCase()
+        : 'P';
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
@@ -158,7 +243,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
+                          avatarLetter,
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -169,13 +254,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(width: 16),
 
-                    // Name & Unit / Applicant Status
+                    // Company Name & Personal Name
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _name,
+                            displayProfileTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -184,28 +271,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 3),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: hasLease ? 0 : 8,
-                              vertical: hasLease ? 0 : 2,
-                            ),
-                            decoration: hasLease
-                                ? null
-                                : BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0xFF1E3A8A).withValues(alpha: 0.3)
-                                        : AppColors.accentSoft,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                            child: Text(
-                              unit,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: hasLease
-                                    ? (isDark ? const Color(0xFF94A3B8) : AppColors.ink500)
-                                    : (isDark ? const Color(0xFF60A5FA) : AppColors.accent),
-                                fontWeight: hasLease ? FontWeight.w500 : FontWeight.w700,
-                              ),
+                          Text(
+                            displayProfileSub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: isDark ? const Color(0xFF94A3B8) : AppColors.ink500,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -245,7 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Lease Information',
+                                  _leaseData?['property_name']?.toString() ?? 'Commercial Lease Agreement',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
@@ -254,7 +329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '$leaseNumber\nEnds Dec 31, 2027',
+                                  'Active Agreement • Tap to View Contract',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isDark ? const Color(0xFF94A3B8) : AppColors.ink500,
@@ -282,12 +357,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildMenuItem(
                 icon: Icons.person_outline_rounded,
                 title: 'Personal Information',
-                onTap: () => _showComingSoon('Personal Information'),
-              ),
-              _buildMenuItem(
-                icon: Icons.contact_mail_outlined,
-                title: 'Contact Information',
-                onTap: () => _showComingSoon('Contact Information'),
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PersonalInfoScreen()),
+                  );
+                  _loadProfile();
+                },
               ),
             ]),
 
@@ -387,6 +463,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.shield_outlined,
                   title: 'Security',
                   onTap: () => _showComingSoon('Security Settings'),
+                ),
+                _buildMenuItem(
+                  icon: Icons.cleaning_services_outlined,
+                  title: 'Clear Cache & Refresh',
+                  onTap: _clearAppCache,
                 ),
                 _buildMenuItem(
                   icon: Icons.help_outline_rounded,

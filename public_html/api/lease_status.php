@@ -23,7 +23,7 @@ $stmt = $pdo->prepare(
             p.name AS property_name, p.address AS property_address, p.type AS property_type,
             (SELECT photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo,
             u.company_name AS lessor_name,
-            a.rent, a.term_months
+            a.rent, a.term_months, a.business_name
      FROM tenants t
      JOIN properties p ON p.id = t.property_id
      JOIN users u ON u.id = t.lessor_id
@@ -35,10 +35,23 @@ $stmt = $pdo->prepare(
 $stmt->execute([$lessee['id']]);
 $lease = $stmt->fetch();
 
+$companyName = !empty($lease['business_name']) 
+    ? $lease['business_name'] 
+    : (!empty($lessee['company_name']) ? $lessee['company_name'] : '');
+
+$userPayload = [
+    'id'           => (int) $lessee['id'],
+    'full_name'    => $lessee['full_name'] ?? ($lessee['name'] ?? ''),
+    'company_name' => $companyName,
+    'email'        => $lessee['email'] ?? '',
+    'phone'        => $lessee['phone'] ?? '',
+];
+
 if (!$lease) {
-    json_ok(['has_lease' => false]);
+    json_ok(['has_lease' => false, 'user' => $userPayload]);
 }
 
+$lease['business_name'] = $companyName;
 $lease['rent'] = (float) ($lease['rent'] ?? 0);
 $lease['term_months'] = (int) ($lease['term_months'] ?? 0);
 if (!empty($lease['cover_photo'])) {
@@ -49,5 +62,5 @@ $ticketStmt = $pdo->prepare('SELECT COUNT(*) FROM maintenance_tickets WHERE tena
 $ticketStmt->execute([$lease['tenant_id']]);
 $lease['open_tickets'] = (int) $ticketStmt->fetchColumn();
 
-json_ok(['has_lease' => true, 'lease' => $lease]);
+json_ok(['has_lease' => true, 'lease' => $lease, 'user' => $userPayload]);
 

@@ -30,6 +30,13 @@ define('SMTP_PASS', 'pwestora*BSIT4B'); // <-- the password you set when creatin
 define('SMTP_FROM_NAME', 'Pwestora');
 
 // -----------------------------------------------------------
+// PhilSMS Gateway (SMS notifications & OTP verification)
+// -----------------------------------------------------------
+define('PHILSMS_API_TOKEN', '5183|oWe5LHUtWsurqDo7KqXljwB2nmo0Ry7FClrPmDlJb79d2071');
+define('PHILSMS_SENDER_ID', 'PhilSMS'); // Default approved sender ID on PhilSMS
+define('PHILSMS_API_URL', 'https://dashboard.philsms.com/api/v3/sms/send');
+
+// -----------------------------------------------------------
 // PDO connection (used by every page via require 'config.php')
 // -----------------------------------------------------------
 try {

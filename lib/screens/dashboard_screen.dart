@@ -32,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<Map<String, dynamic>>> _violationsFuture;
   late Future<String> _rentStatusFuture;
   String _userName = '';
+  String _companyName = '';
   bool _gateChecked = false;
 
   @override
@@ -70,8 +71,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadUserName() async {
     final name = await ApiService.getUserName();
-    if (name != null && name.isNotEmpty && mounted) {
-      setState(() => _userName = name);
+    final company = await ApiService.getCompanyName();
+    if (mounted) {
+      setState(() {
+        if (name != null && name.isNotEmpty) _userName = name;
+        if (company != null && company.isNotEmpty) _companyName = company;
+      });
     }
   }
 
@@ -161,29 +166,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hello ${_userName.isNotEmpty ? _userName.split(' ').first : 'Jake'}!',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              color: isDark ? Colors.white : const Color(0xFF111418),
-                              letterSpacing: -0.9,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            "Let's manage your space today.",
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                              letterSpacing: -0.1,
-                            ),
-                          ),
-                        ],
+                      child: Builder(
+                        builder: (context) {
+                          final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
+                          final effectiveCompany = _companyName.isNotEmpty
+                              ? _companyName
+                              : (leaseCompany.isNotEmpty ? leaseCompany : '');
+                          final displayName = effectiveCompany.isNotEmpty
+                              ? effectiveCompany
+                              : (_userName.isNotEmpty ? _userName : 'Jake Peralta');
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                effectiveCompany.isNotEmpty ? 'COMMERCIAL SPACE' : 'WELCOME BACK',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.electricBlue,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: isDark ? Colors.white : const Color(0xFF111418),
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                "Let's manage your space today.",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -200,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF2C394B), Color(0xFF0F172A)],
+                            colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -217,13 +246,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                         child: Center(
-                          child: Text(
-                            _userName.isNotEmpty ? _userName[0].toUpperCase() : 'J',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                            ),
+                          child: Builder(
+                            builder: (context) {
+                              final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
+                              final effectiveCompany = _companyName.isNotEmpty
+                                  ? _companyName
+                                  : (leaseCompany.isNotEmpty ? leaseCompany : '');
+                              final displayInitial = effectiveCompany.isNotEmpty
+                                  ? effectiveCompany[0].toUpperCase()
+                                  : (_userName.isNotEmpty ? _userName[0].toUpperCase() : 'P');
+
+                              return Text(
+                                displayInitial,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -262,6 +303,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? '15 Nov ${now.year}'
                           : '30 $currentMonthName ${now.year}';
 
+                      final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
+                      final effectiveCompany = _companyName.isNotEmpty
+                          ? _companyName
+                          : (leaseCompany.isNotEmpty ? leaseCompany : '');
+                      final cardTenantName = effectiveCompany.isNotEmpty
+                          ? effectiveCompany
+                          : (_userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'));
+
+                      final propertyName = (widget.lease['property_name']?.toString().trim().isNotEmpty == true)
+                          ? widget.lease['property_name'].toString().trim()
+                          : 'Commercial Property';
+
                       return Column(
                         children: [
                           Padding(
@@ -269,7 +322,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: LuxuryRentCard(
                               rentAmount: effectiveRentAmount,
                               dueDate: effectiveDueDate,
-                              tenantName: _userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'),
+                              propertyName: propertyName,
+                              tenantName: cardTenantName,
                               activeArrangement: hasRestructuring ? latest : null,
                               isOverdue: isOverdue,
                               isGracePeriod: isGracePeriod,

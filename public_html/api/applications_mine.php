@@ -14,7 +14,7 @@ $lessee = require_lessee_auth($pdo);
 
 try {
     $stmt = $pdo->prepare(
-        "SELECT a.id, a.term_months, a.rent, a.status, a.submitted_at,
+        "SELECT a.id, a.business_name, a.term_months, a.rent, a.status, a.submitted_at,
                 a.checklist_negotiation, a.lessor_rebuttal, a.rebuttal_at,
                 a.valid_id_path, a.sec_dti_path, a.business_permit_path, a.bir_cert_path,
                 p.name AS property_name, u.company_name AS lessor_name
@@ -28,7 +28,7 @@ try {
     $applications = $stmt->fetchAll();
 } catch (Throwable $e) {
     $stmt = $pdo->prepare(
-        "SELECT a.id, a.term_months, a.rent, a.status, a.submitted_at,
+        "SELECT a.id, a.business_name, a.term_months, a.rent, a.status, a.submitted_at,
                 p.name AS property_name, u.company_name AS lessor_name
          FROM applications a
          JOIN properties p ON p.id = a.property_id

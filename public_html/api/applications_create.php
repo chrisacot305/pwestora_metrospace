@@ -92,6 +92,13 @@ try {
 
 $appId = (int) $pdo->lastInsertId();
 
+// Also record/sync Company / Business Name on the user's profile
+if (!empty($businessName)) {
+    try {
+        $pdo->prepare('UPDATE users SET company_name = ? WHERE id = ?')->execute([$businessName, $lessee['id']]);
+    } catch (Throwable $ignore) {}
+}
+
 // Handle uploaded verification documents
 $ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 $MAX_FILE_MB = 10;

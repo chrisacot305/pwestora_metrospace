@@ -28,5 +28,10 @@ $pdo->prepare('UPDATE users SET api_token = ? WHERE id = ?')->execute([$token, $
 
 json_ok([
     'token' => $token,
-    'user'  => ['id' => $user['id'], 'full_name' => $user['full_name'], 'email' => $user['email']],
+    'user'  => [
+        'id'        => $user['id'],
+        'full_name' => $user['full_name'],
+        'email'     => $user['email'],
+        'phone'     => $user['phone'] ?? '',
+    ],
 ]);
