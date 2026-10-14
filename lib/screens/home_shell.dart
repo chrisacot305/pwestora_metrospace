@@ -20,6 +20,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
   int _applicantAppsTick = 0;
+  bool _isChatTyping = false;
   late Future<Map<String, dynamic>?> _leaseFuture;
 
   @override
@@ -75,6 +76,8 @@ class _HomeShellState extends State<HomeShell> {
                 ScheduleScreen(lease: lease),
                 MessagesScreen(
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
+                  onTypingChanged: (typing) =>
+                      setState(() => _isChatTyping = typing),
                 ),
                 ProfileScreen(
                   lease: lease,
@@ -97,16 +100,21 @@ class _HomeShellState extends State<HomeShell> {
               ];
 
         final safeIndex = _currentIndex.clamp(0, screens.length - 1);
+        final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+        final hideDock = isKeyboardOpen || (safeIndex == 2 && _isChatTyping);
 
         return Scaffold(
           extendBody: true,
+          resizeToAvoidBottomInset: false,
           body: IndexedStack(
             index: safeIndex,
             children: screens,
           ),
-          bottomNavigationBar: hasActiveLease
-              ? _buildTenantDock(lease, safeIndex)
-              : _buildApplicantDock(safeIndex),
+          bottomNavigationBar: hideDock
+              ? null
+              : (hasActiveLease
+                  ? _buildTenantDock(lease, safeIndex)
+                  : _buildApplicantDock(safeIndex)),
         );
       },
     );

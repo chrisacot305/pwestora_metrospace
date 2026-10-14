@@ -103,7 +103,7 @@ class ApiService {
     try {
       await _postJson('profile_update.php', {
         'full_name': fullName,
-        if (companyName != null) 'company_name': companyName,
+        'company_name': ?companyName,
         'email': email,
         'phone': phone,
       }, auth: true);

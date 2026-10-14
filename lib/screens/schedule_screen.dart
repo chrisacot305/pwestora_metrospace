@@ -13,7 +13,7 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   late DateTime _currentMonth;
-  late int _selectedDay;
+  DateTime? _selectedDate;
   bool _showAll = true; // Controls "View all" vs "View less"
   bool _loading = true;
 
@@ -26,7 +26,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     super.initState();
     final now = DateTime.now();
     _currentMonth = DateTime(now.year, now.month, 1);
-    _selectedDay = now.day;
+    _selectedDate = DateTime(now.year, now.month, now.day);
     _fetchScheduleData();
   }
 
@@ -187,6 +187,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void _changeMonth(int offset) {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + offset, 1);
+      _showAll = true;
+      _buildEventsForCurrentMonth();
+    });
+  }
+
+  void _goToToday() {
+    final now = DateTime.now();
+    setState(() {
+      _currentMonth = DateTime(now.year, now.month, 1);
+      _selectedDate = DateTime(now.year, now.month, now.day);
+      _showAll = true;
       _buildEventsForCurrentMonth();
     });
   }
@@ -210,9 +221,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isCurrentMonth = _currentMonth.year == now.year && _currentMonth.month == now.month;
+    final selectedDay = (_selectedDate != null &&
+            _selectedDate!.year == _currentMonth.year &&
+            _selectedDate!.month == _currentMonth.month)
+        ? _selectedDate!.day
+        : (isCurrentMonth ? now.day : 1);
+
     final filteredEvents = _showAll
         ? _events
-        : _events.where((e) => e['day'] == _selectedDay).toList();
+        : _events.where((e) => e['day'] == selectedDay).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -266,13 +285,47 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF0B1B3D), size: 26),
                           onPressed: () => _changeMonth(-1),
                         ),
-                        Text(
-                          '${_getMonthName(_currentMonth.month)} ${_currentMonth.year}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0B1B3D),
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${_getMonthName(_currentMonth.month)} ${_currentMonth.year}',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0B1B3D),
+                              ),
+                            ),
+                            if (!isCurrentMonth) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: _goToToday,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.electricBlue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppColors.electricBlue.withValues(alpha: 0.3)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.today_rounded, size: 12, color: AppColors.electricBlue),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Today',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.electricBlue,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         IconButton(
                           icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF0B1B3D), size: 26),
@@ -383,7 +436,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         const Icon(Icons.event_available_rounded, size: 38, color: Color(0xFFCBD5E1)),
                         const SizedBox(height: 10),
                         Text(
-                          'No events on Day $_selectedDay',
+                          'No events on ${_getMonthName(_currentMonth.month)} $selectedDay',
                           style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155)),
                         ),
                         const SizedBox(height: 4),
@@ -444,6 +497,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Widget _buildLargeCalendarGrid() {
+    final now = DateTime.now();
     final totalDays = _daysInMonth(_currentMonth);
     final offset = _firstWeekdayOffset(_currentMonth);
     final totalCells = offset + totalDays;
@@ -462,14 +516,79 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         }
 
         final day = index - offset + 1;
-        final isSelected = day == _selectedDay;
+        final isToday = _currentMonth.year == now.year &&
+            _currentMonth.month == now.month &&
+            day == now.day;
+        final isSelected = !_showAll &&
+            _selectedDate != null &&
+            _selectedDate!.year == _currentMonth.year &&
+            _selectedDate!.month == _currentMonth.month &&
+            _selectedDate!.day == day;
         final dayEvents = _events.where((e) => e['day'] == day).toList();
+
+        BoxDecoration boxDecoration;
+        Color textColor;
+        FontWeight fontWeight;
+
+        if (isToday && isSelected) {
+          boxDecoration = BoxDecoration(
+            color: AppColors.electricBlue,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.electricBlue.withValues(alpha: 0.4),
+                blurRadius: 7,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          );
+          textColor = Colors.white;
+          fontWeight = FontWeight.w900;
+        } else if (isToday) {
+          // Current date ALWAYS remains marked
+          boxDecoration = BoxDecoration(
+            color: AppColors.electricBlue.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.electricBlue, width: 2.0),
+          );
+          textColor = AppColors.electricBlue;
+          fontWeight = FontWeight.w900;
+        } else if (isSelected) {
+          boxDecoration = BoxDecoration(
+            color: const Color(0xFF0B1B3D),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0B1B3D).withValues(alpha: 0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          );
+          textColor = Colors.white;
+          fontWeight = FontWeight.w800;
+        } else {
+          boxDecoration = const BoxDecoration(
+            color: Colors.transparent,
+            shape: BoxShape.circle,
+          );
+          textColor = const Color(0xFF0B1B3D);
+          fontWeight = FontWeight.w600;
+        }
 
         return GestureDetector(
           onTap: () {
             setState(() {
-              _selectedDay = day;
-              _showAll = false;
+              if (_selectedDate != null &&
+                  _selectedDate!.year == _currentMonth.year &&
+                  _selectedDate!.month == _currentMonth.month &&
+                  _selectedDate!.day == day &&
+                  !_showAll) {
+                _showAll = true;
+              } else {
+                _selectedDate = DateTime(_currentMonth.year, _currentMonth.month, day);
+                _showAll = false;
+              }
             });
           },
           behavior: HitTestBehavior.opaque,
@@ -479,17 +598,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF0B1B3D) : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
+                decoration: boxDecoration,
                 alignment: Alignment.center,
                 child: Text(
                   '$day',
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    color: isSelected ? Colors.white : const Color(0xFF0B1B3D),
+                    fontWeight: fontWeight,
+                    color: textColor,
                   ),
                 ),
               ),

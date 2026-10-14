@@ -13,12 +13,14 @@ class PaymentArrangementScreen extends StatefulWidget {
   });
 
   @override
-  State<PaymentArrangementScreen> createState() => _PaymentArrangementScreenState();
+  State<PaymentArrangementScreen> createState() =>
+      _PaymentArrangementScreenState();
 }
 
 class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
   String _selectedPlan = '2 payments';
   String _selectedReason = 'Cash flow delay this month';
+  final TextEditingController _noteCtrl = TextEditingController();
   bool _submitting = false;
   bool _loading = true;
   List<dynamic> _existingRequests = [];
@@ -27,13 +29,18 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     'Cash flow delay this month',
     'Seasonal slowdown in business',
     'Unexpected business expense',
-    'Other',
   ];
 
   @override
   void initState() {
     super.initState();
     _fetchRequests();
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchRequests() async {
@@ -53,11 +60,38 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
 
   Future<void> _submitRequest() async {
     setState(() => _submitting = true);
+    final note = _noteCtrl.text.trim();
+    final combinedReason = note.isNotEmpty
+        ? '$_selectedReason • Note: "$note"'
+        : _selectedReason;
+    final rent = (widget.lease['rent'] as num?)?.toDouble() ?? 12000.0;
+    final insts = _getInstallmentsForPlan(rent);
+    final scheduleLines = insts
+        .map(
+          (i) =>
+              '• ${i['label']}: ₱${_formatMoney((i['amount'] as num).toDouble())} (${i['timing']})',
+        )
+        .join('\n');
+
     try {
       await ApiService.createInstallmentRequest(
-        reason: _selectedReason,
+        reason: combinedReason,
         planLabel: _selectedPlan,
       );
+
+      // Auto-post formal proposal details to the chat thread with lessor
+      try {
+        final notePart = note.isNotEmpty ? '\nNote: "$note"' : '';
+        await ApiService.sendMessage(
+          '📋 Payment Restructuring Request\n'
+          'Plan: $_selectedPlan\n'
+          'Reason: $_selectedReason$notePart\n'
+          'Schedule:\n$scheduleLines\n'
+          'Status: Pending Review (48h Cooling-off Active)',
+        );
+      } catch (_) {
+        // Chat notification is complementary; proceed even if message post fails
+      }
 
       if (mounted) {
         setState(() => _submitting = false);
@@ -82,34 +116,63 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     final reqId = rawId is int
         ? rawId
         : (rawId is num
-            ? rawId.toInt()
-            : int.tryParse(rawId?.toString() ?? '') ?? 0);
+              ? rawId.toInt()
+              : int.tryParse(rawId?.toString() ?? '') ?? 0);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Cancel Restructuring Request?',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0B1B3D)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: const [
+            Icon(
+              Icons.history_toggle_off_rounded,
+              color: Color(0xFFDC2626),
+              size: 22,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Cancel Request?',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0B1B3D),
+              ),
+            ),
+          ],
         ),
         content: const Text(
-          'Are you sure you want to cancel this pending restructuring request? Your payment schedule will return to standard monthly rent.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+          'Within your 48-hour cooling-off window, you can freely cancel this restructuring request with zero penalty. Your payment schedule will remain standard monthly rent.',
+          style: TextStyle(
+            fontSize: 13,
+            color: Color(0xFF64748B),
+            height: 1.45,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep Request', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Keep Request',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFDC2626),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               elevation: 0,
             ),
-            child: const Text('Cancel Request', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text(
+              'Yes, Cancel Request',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -119,15 +182,27 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
       setState(() => _loading = true);
       final success = await ApiService.cancelInstallmentRequest(reqId);
       if (mounted) {
+        if (success) {
+          try {
+            await ApiService.sendMessage(
+              '↩️ Restructuring Request Revoked\n'
+              'The pending payment restructuring request has been canceled within the 48-hour cooling-off window. Standard rent terms remain active.',
+            );
+          } catch (_) {}
+        }
         widget.onArrangementSubmitted?.call();
         await _fetchRequests();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              success ? 'Restructuring request cancelled successfully.' : 'Unable to cancel request.',
+              success
+                  ? 'Restructuring request cancelled successfully.'
+                  : 'Unable to cancel request.',
             ),
-            backgroundColor: success ? const Color(0xFF0B1B3D) : AppColors.error,
+            backgroundColor: success
+                ? const Color(0xFF0B1B3D)
+                : AppColors.error,
           ),
         );
       }
@@ -163,7 +238,10 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFECFDF5),
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 2),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                  width: 2,
+                ),
               ),
               child: const Icon(
                 Icons.check_circle_rounded,
@@ -184,7 +262,7 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Your lessor has been notified via the Pwestora Portal. A formal audit entry has been recorded to preserve your security deposit escrow.',
+              'Your lessor has been notified via the Pwestora Portal. You have a 48-hour cooling-off period to revoke this request if you change your mind.',
               style: TextStyle(
                 fontSize: 13,
                 color: Color(0xFF64748B),
@@ -204,10 +282,15 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                   backgroundColor: const Color(0xFF0B1B3D),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   elevation: 0,
                 ),
-                child: const Text('Back to Schedule & Requests', style: TextStyle(fontWeight: FontWeight.w800)),
+                child: const Text(
+                  'Back to Schedule & Requests',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -217,97 +300,485 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     );
   }
 
-  void _showDepositEscrowDetails(double depositAmount) {
+  List<Map<String, dynamic>> _getInstallmentsForPlan(double rent) {
+    final now = DateTime.now();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final endOfMonthDay = DateTime(now.year, now.month + 1, 0).day;
+    final dueMonthShort = months[(now.month - 1).clamp(0, 11)];
+
+    final nextMonthDate = DateTime(now.year, now.month + 1, 15);
+    final nextMonthShort = months[(nextMonthDate.month - 1).clamp(0, 11)];
+
+    if (_selectedPlan == '3 payments') {
+      final p2d2 = DateTime(
+        now.year,
+        now.month,
+        endOfMonthDay,
+      ).add(const Duration(days: 10));
+      final p2d2Short = months[(p2d2.month - 1).clamp(0, 11)];
+      final p2d3 = DateTime(
+        now.year,
+        now.month,
+        endOfMonthDay,
+      ).add(const Duration(days: 20));
+      final p2d3Short = months[(p2d3.month - 1).clamp(0, 11)];
+      return [
+        {
+          'label': 'Payment 1 (33%)',
+          'amount': rent / 3,
+          'timing': '$dueMonthShort $endOfMonthDay, ${now.year}',
+        },
+        {
+          'label': 'Payment 2 (33%)',
+          'amount': rent / 3,
+          'timing': '$p2d2Short ${p2d2.day}, ${p2d2.year}',
+        },
+        {
+          'label': 'Payment 3 (33%)',
+          'amount': rent / 3,
+          'timing': '$p2d3Short ${p2d3.day}, ${p2d3.year}',
+        },
+      ];
+    } else {
+      return [
+        {
+          'label': 'Payment 1 (50%)',
+          'amount': rent / 2,
+          'timing': '$dueMonthShort $endOfMonthDay, ${now.year}',
+        },
+        {
+          'label': 'Payment 2 (50%)',
+          'amount': rent / 2,
+          'timing': '$nextMonthShort 15, ${nextMonthDate.year}',
+        },
+      ];
+    }
+  }
+
+  void _showConfirmationModal(double rent) {
+    final installments = _getInstallmentsForPlan(rent);
+    bool agreed = false;
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
             ),
-            const SizedBox(height: 20),
-            Row(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                // Top handle
+                const SizedBox(height: 12),
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  child: const Icon(Icons.shield_rounded, color: Color(0xFF1E6BFF), size: 22),
                 ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Security Deposit Escrow',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0B1B3D)),
+                const SizedBox(height: 16),
+
+                // Scrollable content
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Icon + Title
+                        Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF1E6BFF,
+                                  ).withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.handshake_rounded,
+                                color: Color(0xFF1E6BFF),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Review Plan Agreement',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0B1B3D),
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Verify milestone dates & terms before submitting',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+
+                        // Milestone Summary Card
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Proposed Installments',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0B1B3D),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE0E7FF),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _selectedPlan.toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF4338CA),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ...installments.map((inst) {
+                                final amount = (inst['amount'] as num)
+                                    .toDouble();
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 5,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_today_rounded,
+                                            size: 14,
+                                            color: Color(0xFF1E6BFF),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                inst['label'],
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF1E293B),
+                                                ),
+                                              ),
+                                              Text(
+                                                'Due: ${inst['timing']}',
+                                                style: const TextStyle(
+                                                  fontSize: 10.5,
+                                                  color: Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      Text(
+                                        '₱${_formatMoney(amount)}',
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF0B1B3D),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              const Divider(
+                                height: 20,
+                                color: Color(0xFFE2E8F0),
+                              ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Total Rent Amount',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  Text(
+                                    '₱${_formatMoney(rent)}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF1E6BFF),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Stated Reason: ',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      _selectedReason,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0B1B3D),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_noteCtrl.text.trim().isNotEmpty) ...[
+                                const SizedBox(height: 5),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Note to Lessor: ',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        '"${_noteCtrl.text.trim()}"',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0B1B3D),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Key Safeguards & 48h Window
+                        _buildAgreementPoint(
+                          Icons.timer_outlined,
+                          '48-Hour Cooling-Off Period:',
+                          'You have 2 days from submission to freely cancel this request with zero penalty.',
+                          const Color(0xFF1E6BFF),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildAgreementPoint(
+                          Icons.verified_rounded,
+                          'Zero Late Fines:',
+                          'Default late charges are waived as long as each milestone is paid by its due date.',
+                          const Color(0xFF10B981),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildAgreementPoint(
+                          Icons.timer_outlined,
+                          '48-Hour Cancellation Window:',
+                          'You can cancel this restructuring request anytime within 48 hours before lessor review.',
+                          const Color(0xFF8B5CF6),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // Mandatory Agreement Checkbox
+                        InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              agreed = !agreed;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: agreed
+                                  ? const Color(0xFFEFF6FF)
+                                  : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: agreed
+                                    ? const Color(0xFF93C5FD)
+                                    : const Color(0xFFE2E8F0),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Checkbox(
+                                    value: agreed,
+                                    onChanged: (val) {
+                                      setModalState(() {
+                                        agreed = val ?? false;
+                                      });
+                                    },
+                                    activeColor: const Color(0xFF1E6BFF),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'I have reviewed the payment milestones and agree to this restructuring request. I understand this formal agreement will be forwarded for lessor approval.',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
                     ),
-                    Text(
-                      'Governed by Lease Contract Sec. 4.2',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                    ),
-                  ],
+                  ),
+                ),
+
+                // Action Buttons
+                Container(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      AppBackButton(
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: agreed
+                              ? () {
+                                  Navigator.pop(ctx);
+                                  _submitRequest();
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0B1B3D),
+                            disabledBackgroundColor: const Color(0xFFE2E8F0),
+                            foregroundColor: Colors.white,
+                            disabledForegroundColor: const Color(0xFF94A3B8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Agree & Submit Request',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            _buildEscrowDetailRow('Total Deposit Held', '₱${_formatMoney(depositAmount)} (2 Months)'),
-            _buildEscrowDetailRow('Escrow Status', '100% Intact & Locked'),
-            _buildEscrowDetailRow('Replenishment Policy', 'Immediate top-up upon emergency use'),
-            _buildEscrowDetailRow('Permitted Usage', 'Structural damage / Final vacancy repair only'),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B1B3D),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
-                child: const Text('Understood', style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildEscrowDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(fontSize: 12.5, color: Color(0xFF0B1B3D), fontWeight: FontWeight.w800)),
-        ],
-      ),
-    );
-  }
 
   String _formatMoney(num val) {
     final str = val.toStringAsFixed(0);
@@ -324,20 +795,40 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
   @override
   Widget build(BuildContext context) {
     final rent = (widget.lease['rent'] as num?)?.toDouble() ?? 12000.0;
-    final deposit = rent * 2; // Standard 2-month security deposit
 
     final now = DateTime.now();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final endOfMonthDay = DateTime(now.year, now.month + 1, 0).day;
     final dueMonthShort = months[(now.month - 1).clamp(0, 11)];
-    
+
     final nextMonthDate = DateTime(now.year, now.month + 1, 15);
     final nextMonthShort = months[(nextMonthDate.month - 1).clamp(0, 11)];
 
     // Dates for 3 payments
-    final p2d2 = DateTime(now.year, now.month, endOfMonthDay).add(const Duration(days: 10));
+    final p2d2 = DateTime(
+      now.year,
+      now.month,
+      endOfMonthDay,
+    ).add(const Duration(days: 10));
     final p2d2Short = months[(p2d2.month - 1).clamp(0, 11)];
-    final p2d3 = DateTime(now.year, now.month, endOfMonthDay).add(const Duration(days: 20));
+    final p2d3 = DateTime(
+      now.year,
+      now.month,
+      endOfMonthDay,
+    ).add(const Duration(days: 20));
     final p2d3Short = months[(p2d3.month - 1).clamp(0, 11)];
 
     return Scaffold(
@@ -376,7 +867,9 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                         height: 140,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFF00E5FF).withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFF00E5FF,
+                          ).withValues(alpha: 0.12),
                         ),
                       ),
                     ),
@@ -388,16 +881,26 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.8),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.25),
+                                width: 0.8,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: const [
-                                Icon(Icons.handshake_outlined, size: 13, color: Color(0xFF00E5FF)),
+                                Icon(
+                                  Icons.handshake_outlined,
+                                  size: 13,
+                                  color: Color(0xFF00E5FF),
+                                ),
                                 SizedBox(width: 5),
                                 Text(
                                   'Formal Concession Protocol',
@@ -423,7 +926,7 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Structured split installments to protect cashflow & preserve security deposit.',
+                            'Structured split installments to protect cashflow.',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w400,
@@ -446,13 +949,13 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. SECURITY DEPOSIT SHIELD CARD
-                  _buildSecurityDepositShieldCard(deposit),
-
-                  const SizedBox(height: 16),
-
-                  // 2. MUTUAL BENEFIT BAR
+                  // 1. MUTUAL BENEFIT BAR
                   _buildMutualBenefitBar(),
+
+                  const SizedBox(height: 18),
+
+                  // 2.5 INSTRUCTIONS & HOW IT WORKS (SMOOTH & INTEGRATED)
+                  _buildInstructionsCard(),
 
                   const SizedBox(height: 24),
 
@@ -464,7 +967,10 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                         child: SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1E6BFF)),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1E6BFF),
+                          ),
                         ),
                       ),
                     )
@@ -482,7 +988,10 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEAF2FF),
                             borderRadius: BorderRadius.circular(10),
@@ -499,19 +1008,27 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    ..._existingRequests.map((req) => _buildRequestHistoryCard(req)),
+                    ..._existingRequests.map(
+                      (req) => _buildRequestHistoryCard(req),
+                    ),
                     const SizedBox(height: 24),
                   ],
 
-                  // 4. PLAN SELECTION SECTION
-                  const Text(
-                    'Select Installment Plan',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0B1B3D),
-                      letterSpacing: -0.2,
-                    ),
+                  // 4. PLAN SELECTION SECTION (STEP 1)
+                  Row(
+                    children: [
+                      _buildStepBadge('1'),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Step 1: Select Installment Plan',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0B1B3D),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -534,12 +1051,14 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       {
                         'label': 'Payment 1 (50%)',
                         'amount': rent / 2,
-                        'timing': 'Due $dueMonthShort $endOfMonthDay, ${now.year}',
+                        'timing':
+                            'Due $dueMonthShort $endOfMonthDay, ${now.year}',
                       },
                       {
                         'label': 'Payment 2 (50%)',
                         'amount': rent / 2,
-                        'timing': 'Due $nextMonthShort 15, ${nextMonthDate.year}',
+                        'timing':
+                            'Due $nextMonthShort 15, ${nextMonthDate.year}',
                       },
                     ],
                   ),
@@ -556,7 +1075,8 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       {
                         'label': 'Payment 1 (33%)',
                         'amount': rent / 3,
-                        'timing': 'Due $dueMonthShort $endOfMonthDay, ${now.year}',
+                        'timing':
+                            'Due $dueMonthShort $endOfMonthDay, ${now.year}',
                       },
                       {
                         'label': 'Payment 2 (33%)',
@@ -573,15 +1093,21 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
 
                   const SizedBox(height: 24),
 
-                  // 5. STRUCTURED REASON SELECTOR
-                  const Text(
-                    'Formal Restructuring Reason',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0B1B3D),
-                      letterSpacing: -0.2,
-                    ),
+                  // 5. STRUCTURED REASON SELECTOR (STEP 2)
+                  Row(
+                    children: [
+                      _buildStepBadge('2'),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Step 2: State Your Reason',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0B1B3D),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -609,43 +1135,133 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                         backgroundColor: Colors.white,
                         labelStyle: TextStyle(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF334155),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: isSelected ? const Color(0xFF0B1B3D) : const Color(0xFFE2E8F0),
+                            color: isSelected
+                                ? const Color(0xFF0B1B3D)
+                                : const Color(0xFFE2E8F0),
                             width: 1.2,
                           ),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                       );
                     }).toList(),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // Optional message / explanation to lessor
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 14,
+                              color: Color(0xFF1E6BFF),
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Other : Personal Note (Optional)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0B1B3D),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _noteCtrl,
+                          maxLines: 3,
+                          minLines: 2,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF0B1B3D),
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Specify other circumstances or write a note to your lessor...',
+                            hintStyle: TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF94A3B8),
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
 
-                  // 6. LEGAL & LEASE CLAUSE DISCLAIMER
+                  // 6. LEGAL & LEASE CLAUSE DISCLAIMER (STEP 3)
+                  Row(
+                    children: [
+                      _buildStepBadge('3'),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Step 3: Review & Confirm Agreement',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0B1B3D),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
+                      color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFDE68A)),
+                      border: Border.all(
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Icon(Icons.gavel_rounded, size: 18, color: Color(0xFFD97706)),
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 18,
+                          color: Color(0xFF1E6BFF),
+                        ),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Submitting this request creates an official audit log in the Lessor Pwestora Portal. It replaces informal verbal agreements and safeguards your security deposit escrow.',
+                            'Submitting this request creates an official audit log in the Lessor Pwestora Portal. It replaces informal verbal agreements and locks in your structured installment schedule.',
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF92400E),
+                              color: Color(0xFF1E40AF),
                               height: 1.35,
                             ),
                           ),
@@ -654,47 +1270,53 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
 
-                  // 7. SUBMIT BUTTON
+                  // 7. SUBMIT BUTTON -> OPENS REVIEW & AGREEMENT CONFIRMATION
                   SizedBox(
                     width: double.infinity,
-                    child: Container(
-                      decoration: AppDecorations.glowButton(radius: 18),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: _submitting ? null : _submitRequest,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Center(
-                              child: _submitting
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: const [
-                                        Text(
-                                          'Submit Restructuring Plan',
-                                          style: TextStyle(
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w900,
-                                            color: Colors.white,
-                                            letterSpacing: 0.2,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
-                                      ],
-                                    ),
-                            ),
-                          ),
+                    child: ElevatedButton(
+                      onPressed: _submitting
+                          ? null
+                          : () => _showConfirmationModal(rent),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0B1B3D),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        elevation: 0,
                       ),
+                      child: _submitting
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Text(
+                                  'Review & Confirm Plan',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
                     ),
                   ),
 
@@ -726,11 +1348,23 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildBenefitItem(Icons.verified_rounded, 'Zero Late Fines', const Color(0xFF10B981)),
+          _buildBenefitItem(
+            Icons.verified_rounded,
+            'Zero Late Fines',
+            const Color(0xFF10B981),
+          ),
           Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
-          _buildBenefitItem(Icons.lock_rounded, 'Deposit Shielded', const Color(0xFF1E6BFF)),
+          _buildBenefitItem(
+            Icons.timer_outlined,
+            '48h Cooling-off',
+            const Color(0xFF1E6BFF),
+          ),
           Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
-          _buildBenefitItem(Icons.history_edu_rounded, 'Audited Trail', const Color(0xFF8B5CF6)),
+          _buildBenefitItem(
+            Icons.history_edu_rounded,
+            'Audited Trail',
+            const Color(0xFF8B5CF6),
+          ),
         ],
       ),
     );
@@ -754,104 +1388,7 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     );
   }
 
-  Widget _buildSecurityDepositShieldCard(double depositAmount) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _showDepositEscrowDetails(depositAmount),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0A1832).withValues(alpha: 0.04),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.2)),
-              ),
-              child: const Icon(Icons.shield_outlined, color: Color(0xFF1E6BFF), size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Security Deposit Escrow',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0B1B3D),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'LOCKED',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF10B981),
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '₱${_formatMoney(depositAmount)} Protected Reserve',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1E6BFF),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: const [
-                      Expanded(
-                        child: Text(
-                          'Tap to view lease Article 4 escrow policy.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Color(0xFF64748B)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildPlanCard({
     required String planKey,
@@ -871,7 +1408,9 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF1E6BFF) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFF1E6BFF)
+                : const Color(0xFFE2E8F0),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: [
@@ -899,7 +1438,9 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF1E6BFF) : const Color(0xFFCBD5E1),
+                          color: isSelected
+                              ? const Color(0xFF1E6BFF)
+                              : const Color(0xFFCBD5E1),
                           width: isSelected ? 6 : 2,
                         ),
                       ),
@@ -916,7 +1457,10 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
@@ -952,7 +1496,11 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFF1E6BFF)),
+                            const Icon(
+                              Icons.fiber_manual_record,
+                              size: 8,
+                              color: Color(0xFF1E6BFF),
+                            ),
                             const SizedBox(width: 8),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1003,6 +1551,12 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     final amount = (req['amount'] as num?)?.toDouble() ?? 0.0;
     final createdAt = req['created_at']?.toString() ?? '';
 
+    final createdDt = DateTime.tryParse(createdAt);
+    final now = DateTime.now();
+    final diffHours = createdDt != null ? now.difference(createdDt).inHours : 0;
+    final isWithin48h = diffHours < 48;
+    final hoursLeft = (48 - diffHours).clamp(1, 48);
+
     Color statusBg = const Color(0xFFFEF3C7);
     Color statusColor = const Color(0xFFD97706);
     String statusLabel = 'PENDING LESSOR REVIEW';
@@ -1035,7 +1589,10 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: statusBg,
                         borderRadius: BorderRadius.circular(6),
@@ -1080,33 +1637,108 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
                   ),
                 if (status == 'pending') ...[
                   const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () => _confirmCancelRequest(req),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                  if (isWithin48h)
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.timer_outlined,
+                                size: 11,
+                                color: Color(0xFF1E6BFF),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${hoursLeft}h left to cancel',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1E6BFF),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => _confirmCancelRequest(req),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFFCA5A5),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.close_rounded,
+                                  size: 12,
+                                  color: Color(0xFFDC2626),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Cancel Request',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                      child: Row(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.close_rounded, size: 12, color: Color(0xFFDC2626)),
+                        children: [
+                          Icon(
+                            Icons.lock_clock_outlined,
+                            size: 11,
+                            color: Color(0xFF64748B),
+                          ),
                           SizedBox(width: 4),
                           Text(
-                            'Cancel Request',
+                            '2-day cancellation window ended • Awaiting lessor review',
                             style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFDC2626),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
                 ],
               ],
             ),
@@ -1121,6 +1753,251 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAgreementPoint(
+    IconData icon,
+    String title,
+    String description,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 15),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: Color(0xFF64748B),
+                height: 1.35,
+              ),
+              children: [
+                TextSpan(
+                  text: '$title ',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0B1B3D),
+                  ),
+                ),
+                TextSpan(text: description),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepBadge(String number) {
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0B1B3D),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        number,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstructionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0A1832).withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF1E6BFF).withValues(alpha: 0.2),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.lightbulb_outline_rounded,
+                  color: Color(0xFF1E6BFF),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'How Payment Restructuring Works',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0B1B3D),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    Text(
+                      'A formal protocol to manage temporary cash flow delays',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 12),
+
+          _buildInstructionStep(
+            stepNumber: '1',
+            title: 'Explore Split Milestones',
+            description:
+                'Select 2-part or 3-part plan to preview exact amounts and due dates with zero commitment.',
+            color: const Color(0xFF1E6BFF),
+          ),
+          const SizedBox(height: 10),
+          _buildInstructionStep(
+            stepNumber: '2',
+            title: 'Review Terms & Agree',
+            description:
+                'Tap "Review & Confirm Plan". You will inspect the schedule, accept terms, and receive 48h to cancel.',
+            color: const Color(0xFF8B5CF6),
+          ),
+          const SizedBox(height: 10),
+          _buildInstructionStep(
+            stepNumber: '3',
+            title: 'Lessor Approval & Scheduled Payments',
+            description:
+                'Once confirmed by your lessor, pay each milestone via GCash/Maya/Bank with 0 late penalties.',
+            color: const Color(0xFF10B981),
+          ),
+
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 14, color: Color(0xFF10B981)),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '2-Day Protection: You have 48 hours to cancel this request before lessor review.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionStep({
+    required String stepNumber,
+    required String title,
+    required String description,
+    required Color color,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: color.withValues(alpha: 0.25),
+              width: 1.2,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            stepNumber,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0B1B3D),
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

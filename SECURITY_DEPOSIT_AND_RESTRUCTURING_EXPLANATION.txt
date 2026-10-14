@@ -1,0 +1,114 @@
+================================================================================
+PWESTORA METROSPACE: PAYMENT RESTRUCTURING & SECURITY DEPOSIT EXPLAINER
+Document Purpose: Capstone/Thesis Defense Reference & System Workflow Guide
+================================================================================
+
+1. WHAT DOES "'₱[Amount] Protected Reserve (LOCKED)'" MEAN?
+--------------------------------------------------------------------------------
+In standard Philippine commercial leasing (and in Pwestora Metrospace):
+- When a tenant moves into a stall, they provide a Security Deposit equivalent 
+  to two (2) months' rent (e.g., if monthly rent is ₱12,000, deposit is ₱24,000).
+- "Protected Reserve": Indicates this money is held securely in an ESCROW fund 
+  by the lessor. It is NOT being deducted, penalized, or spent.
+- "LOCKED" Badge: Clarifies that neither the tenant nor the landlord can access 
+  or consume this money for regular monthly rent payments.
+
+WHO OWNS THIS MONEY?
+- The ₱24,000 is 100% THE TENANT'S MONEY.
+- The landlord does NOT own this money; they act only as an escrow custodian.
+- When the lease terminates and the tenant vacates, the landlord MUST refund the 
+  deposit back to the tenant within 30 days (less any actual physical damages).
+
+
+2. THE TWO SEPARATE POTS OF MONEY
+--------------------------------------------------------------------------------
+Understanding this difference is critical for both tenants and the defense panel:
+
+  +-------------------------------------+--------------------------------------+
+  | POT 1: SECURITY DEPOSIT ESCROW       | POT 2: MONTHLY OPERATING RENT        |
+  | (e.g., ₱24,000 - Protected Reserve)  | (e.g., ₱12,000 - Due Each Month)     |
+  +-------------------------------------+--------------------------------------+
+  | • Paid once at lease signing.       | • Paid recurringly every month.      |
+  | • Stays LOCKED in escrow.           | • This is what pays for occupancy.   |
+  | • CANNOT be used to pay rent.       | • THIS IS THE ONLY MONEY RESTUCTURED |
+  | • Refunded 100% when moving out     |   INTO INSTALLMENT MILESTONES.       |
+  |   (if space has no damages).        |                                      |
+  +-------------------------------------+--------------------------------------+
+
+
+3. WHAT IS THE POINT OF THE INSTALLMENT / RESTRUCTURING PLAN?
+--------------------------------------------------------------------------------
+A tenant realizes in Week 1 that they will struggle to pay the full ₱12,000 
+lump sum due at the end of the month due to temporary cash flow issues (e.g., 
+delayed inventory sales, supplier delays, or medical emergencies).
+
+WITHOUT THE RESTRUCTURING PLAN:
+- The tenant misses the due date.
+- Compounding late penalty fees accumulate (₱500+).
+- The tenant risks padlocking of the stall or eviction.
+- The landlord loses a paying tenant and suffers long vacancy downtime.
+
+WITH THE RESTRUCTURING PLAN:
+- The tenant proactively selects a formal split schedule:
+    * 2-Part Split (Bi-Weekly): 50% at month-end + 50% mid-next month.
+    * 3-Part Split (Decennial): 33% at month-end + 33% mid-month + 33% month-end.
+- Penalty fees are frozen ("Zero Late Fines").
+- Landlord receives guaranteed, predictable cash flow without evicting.
+- The tenant retains their stall and preserves business goodwill.
+
+
+4. CAN THE "PROTECTED RESERVE" (SECURITY DEPOSIT) BE DEDUCTED?
+--------------------------------------------------------------------------------
+DURING ACTIVE LEASE MONTHS:
+- NO. It CANNOT be deducted to cover delayed monthly rent.
+- Why? If a landlord allows rent to drain the deposit, the property is left 
+  unprotected against sudden physical damage or utility abandonment.
+
+AT THE END OF THE LEASE (WHEN VACATING):
+- YES, but ONLY under three strictly audited conditions:
+    1. Physical/Structural Damage: Broken tiles, damaged roll-up doors, shattered 
+       fixtures beyond normal wear and tear.
+    2. Unpaid Utility Bills: Outstanding electricity (Meralco) or water balances.
+    3. Stall Abandonment: If the tenant flees without settling unpaid back rent.
+
+WHAT IF THERE ARE NO DAMAGES?
+- Deductions = ₱0.00.
+- The full ₱24,000 is refunded to the tenant within 30 days.
+
+
+5. WHERE IS THIS IN THE LEASE CONTRACT?
+--------------------------------------------------------------------------------
+Both policies are codified in the app's Lease Contract Screen 
+(lib/screens/lease_contract_screen.dart):
+
+Clause 1: Security Deposit
+  "A security deposit equivalent to two (2) months' rent will be collected and 
+   held. Refundable within 30 days of lease-end less deductions for damages."
+
+Clause 2: Rent Restructuring Policy
+  "Tenants facing temporary cash-flow difficulty may request to split monthly 
+   rent into 2 or 3 installments subject to lessor approval. Late fees are frozen 
+   provided agreed installment deadlines are strictly settled."
+
+
+6. THESIS / CAPSTONE DEFENSE Q&A CHEATSHEET
+--------------------------------------------------------------------------------
+Q1: "Why show the Security Deposit on the Payment Restructuring screen?"
+A1: "To provide transparency and legal clarity. When tenants request rent relief, 
+     many mistakenly wonder if their security deposit is being forfeited or if 
+     rent can be deducted from it. Showing 'Protected Reserve (LOCKED)' reassures 
+     the tenant that their move-in escrow remains 100% safe, while reminding them 
+     that restructuring is for monthly operating rent only."
+
+Q2: "What prevents a tenant from abusing the installment plan?"
+A2: "The request requires formal lessor review, an agreement confirmation modal, 
+     a 48-hour cancellation cooling-off window, and logs directly into the lessor's 
+     audit trail and official in-app chat. Consecutive failures trigger default 
+     strikes as stipulated in the digital contract."
+
+Q3: "Why not just deduct rent from the deposit when a tenant is short on cash?"
+A3: "Under Philippine commercial leasing standards and Civil Code lease norms, 
+     security deposits serve strictly as collateral for property damage and utility 
+     liabilities upon move-out. Depleting it during tenancy leaves the lessor 
+     vulnerable to risk."
+================================================================================
