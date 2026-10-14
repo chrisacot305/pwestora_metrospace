@@ -314,21 +314,11 @@ class _MapScreenState extends State<MapScreen> {
                       // Back to List Button
                       Material(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        elevation: 3,
-                        shadowColor: Colors.black.withValues(alpha: 0.15),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: const Icon(Icons.arrow_back_rounded, color: AppColors.ink900, size: 20),
-                          ),
+                        shape: const CircleBorder(),
+                        elevation: 2,
+                        shadowColor: Colors.black.withValues(alpha: 0.12),
+                        child: AppBackButton(
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ),
                       const SizedBox(width: 10),

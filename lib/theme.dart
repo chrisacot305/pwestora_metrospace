@@ -340,24 +340,29 @@ class AppBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveDark = isDark || Theme.of(context).brightness == Brightness.dark;
+
     return IconButton(
       tooltip: 'Back',
       icon: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isDark
+          color: effectiveDark
               ? Colors.white.withValues(alpha: 0.15)
               : (customColor != null
                   ? customColor!.withValues(alpha: 0.1)
                   : const Color(0xFF0F172A).withValues(alpha: 0.06)),
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.arrow_back_ios_new_rounded,
-          size: 14,
-          color: isDark
-              ? Colors.white
-              : (customColor ?? const Color(0xFF0F172A)),
+        child: Padding(
+          padding: const EdgeInsets.only(right: 1.5),
+          child: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 14,
+            color: effectiveDark
+                ? Colors.white
+                : (customColor ?? const Color(0xFF0F172A)),
+          ),
         ),
       ),
       onPressed: onPressed ?? () => Navigator.of(context).maybePop(),

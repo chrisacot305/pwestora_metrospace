@@ -75,30 +75,9 @@ class _BrowseScreenState extends State<BrowseScreen> {
                         children: [
                           if (Navigator.canPop(context))
                             Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: Material(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(14),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(14),
-                                  onTap: () => Navigator.of(context).pop(),
-                                  child: Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: AppColors.border.withValues(alpha: 0.9)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.primary.withValues(alpha: 0.04),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(Icons.arrow_back_rounded, color: AppColors.ink900, size: 20),
-                                  ),
-                                ),
+                              padding: const EdgeInsets.only(right: 6),
+                              child: AppBackButton(
+                                onPressed: () => Navigator.of(context).pop(),
                               ),
                             ),
                           const Text(

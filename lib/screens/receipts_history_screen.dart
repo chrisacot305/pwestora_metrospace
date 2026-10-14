@@ -540,10 +540,7 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.midnightNavy, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.ink700),

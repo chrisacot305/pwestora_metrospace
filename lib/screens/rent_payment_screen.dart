@@ -319,10 +319,7 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(isDark: true),
         title: const Text(
           'Pay Rent',
           style: TextStyle(

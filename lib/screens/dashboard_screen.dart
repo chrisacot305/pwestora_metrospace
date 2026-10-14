@@ -553,6 +553,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         label: 'Explore',
                         onTap: _openBrowseCatalog,
                       ),
+
+                      // 4. Maintenance with build_circle_outlined Icon
+                      _buildIslandActionItem(
+                        isDark: isDark,
+                        icon: Icons.build_circle_outlined,
+                        label: 'Maintenance',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const TicketsListScreen(),
+                            ),
+                          ).then((_) => _refresh());
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -742,7 +756,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -56,22 +56,18 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   }
 
   void _openCreate() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const TicketCreateScreen()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const TicketCreateScreen()));
     if (created == true) _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        leading: const AppBackButton(),
-        title: const Text('Maintenance & Reports'),
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-      ),
+      backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,
         backgroundColor: AppColors.primary,
@@ -82,14 +78,49 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        color: AppColors.primary,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+              child: Row(
+                children: [
+                  if (Navigator.canPop(context))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: AppBackButton(
+                        isDark: isDark,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      'Maintenance & Reports',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : AppColors.ink900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                color: AppColors.primary,
         child: FutureBuilder<List<dynamic>>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
             }
             if (snapshot.hasError) {
               return ListView(
@@ -100,14 +131,23 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                     child: Container(
                       width: 64,
                       height: 64,
-                      decoration: AppDecorations.squircle(color: AppColors.errorSoft),
-                      child: const Icon(Icons.error_outline, size: 32, color: AppColors.error),
+                      decoration: AppDecorations.squircle(
+                        color: AppColors.errorSoft,
+                      ),
+                      child: const Icon(
+                        Icons.error_outline,
+                        size: 32,
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                    child: Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               );
@@ -124,7 +164,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               return stage == kTicketStages.length - 1;
             }).length;
 
-            final resolveRate = total > 0 ? ((resolved / total) * 100).toInt() : 100;
+            final resolveRate = total > 0
+                ? ((resolved / total) * 100).toInt()
+                : 100;
 
             final filteredTickets = tickets.where((t) {
               final stage = (t['stage'] as num?)?.toInt() ?? 0;
@@ -135,7 +177,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             }).toList();
 
             return ListView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 90),
               children: [
                 // Arto Plus Executive Report Analytics Card
@@ -168,8 +212,12 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                             CircularProgressIndicator(
                               value: total > 0 ? (resolved / total) : 1.0,
                               strokeWidth: 8,
-                              backgroundColor: Colors.white.withValues(alpha: 0.15),
-                              valueColor: const AlwaysStoppedAnimation(Colors.greenAccent),
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.15,
+                              ),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Colors.greenAccent,
+                              ),
                             ),
                             Center(
                               child: Text(
@@ -210,7 +258,10 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '$resolved of $total maintenance reports fully resolved',
-                              style: const TextStyle(color: AppColors.tint, fontSize: 11.5),
+                              style: const TextStyle(
+                                color: AppColors.tint,
+                                fontSize: 11.5,
+                              ),
                             ),
                           ],
                         ),
@@ -248,11 +299,18 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
 
                 // Arto Plus Assigned People / Technicians Row
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: AppDecorations.card(radius: 16),
                   child: Row(
                     children: [
-                      const Icon(Icons.people_alt_outlined, color: AppColors.primary, size: 20),
+                      const Icon(
+                        Icons.people_alt_outlined,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Column(
@@ -260,19 +318,38 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                           children: [
                             Text(
                               'Building Support & Contractors',
-                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink900,
+                              ),
                             ),
                             Text(
                               'Certified plumbers, electricians & HVAC on standby',
-                              style: TextStyle(fontSize: 11, color: AppColors.ink500),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.ink500,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: AppDecorations.badge(bg: AppColors.accentSoft),
-                        child: const Text('24/7 Support', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: AppDecorations.badge(
+                          bg: AppColors.accentSoft,
+                        ),
+                        child: const Text(
+                          '24/7 Support',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -315,15 +392,25 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                     child: Container(
                       width: 64,
                       height: 64,
-                      decoration: AppDecorations.squircle(color: AppColors.accentSoft),
-                      child: const Icon(Icons.build_outlined, size: 32, color: AppColors.primary),
+                      decoration: AppDecorations.squircle(
+                        color: AppColors.accentSoft,
+                      ),
+                      child: const Icon(
+                        Icons.build_outlined,
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
                   const Center(
                     child: Text(
                       'No reports in this category',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink900,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -341,7 +428,11 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           },
         ),
       ),
-    );
+    ),
+  ],
+),
+),
+);
   }
 }
 
@@ -374,7 +465,9 @@ class _ArtoStatCard extends StatelessWidget {
               Container(
                 width: 38,
                 height: 38,
-                decoration: AppDecorations.squircle(color: color.withValues(alpha: 0.12)),
+                decoration: AppDecorations.squircle(
+                  color: color.withValues(alpha: 0.12),
+                ),
                 child: Icon(icon, size: 20, color: color),
               ),
               Container(
@@ -382,7 +475,11 @@ class _ArtoStatCard extends StatelessWidget {
                 decoration: AppDecorations.badge(bg: AppColors.bg),
                 child: Text(
                   trend,
-                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.ink500),
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink500,
+                  ),
                 ),
               ),
             ],
@@ -390,12 +487,21 @@ class _ArtoStatCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             count,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink900, letterSpacing: -0.5),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: AppColors.ink900,
+              letterSpacing: -0.5,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             title,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink500),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink500,
+            ),
           ),
         ],
       ),
@@ -450,10 +556,15 @@ class _ArtoReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final stage = (ticket['stage'] as num?)?.toInt() ?? 0;
     final priority = (ticket['priority'] as String?) ?? 'medium';
-    final (pColor, pBg) = kPriorityColors[priority] ?? kPriorityColors['medium']!;
+    final (pColor, pBg) =
+        kPriorityColors[priority] ?? kPriorityColors['medium']!;
     final icon = kCategoryIcons[ticket['category']] ?? Icons.build_outlined;
-    final progress = kTicketStages.length > 1 ? stage / (kTicketStages.length - 1) : 0.0;
-    final stageName = stage < kTicketStages.length ? kTicketStages[stage] : 'Stage $stage';
+    final progress = kTicketStages.length > 1
+        ? stage / (kTicketStages.length - 1)
+        : 0.0;
+    final stageName = stage < kTicketStages.length
+        ? kTicketStages[stage]
+        : 'Stage $stage';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -464,7 +575,9 @@ class _ArtoReportCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => TicketDetailScreen(ticket: ticket)),
+            MaterialPageRoute(
+              builder: (_) => TicketDetailScreen(ticket: ticket),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -477,7 +590,9 @@ class _ArtoReportCard extends StatelessWidget {
                     Container(
                       width: 44,
                       height: 44,
-                      decoration: AppDecorations.squircle(color: AppColors.accentSoft),
+                      decoration: AppDecorations.squircle(
+                        color: AppColors.accentSoft,
+                      ),
                       child: Icon(icon, size: 22, color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
@@ -489,22 +604,37 @@ class _ArtoReportCard extends StatelessWidget {
                             ticket['title']?.toString() ?? 'Maintenance Issue',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink900),
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink900,
+                            ),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             'Report #MT-${ticket['id']} · ${ticket['category']?.toString().toUpperCase() ?? 'GENERAL'}',
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.ink500, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.ink500,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: AppDecorations.badge(bg: pBg),
                       child: Text(
                         priority.toUpperCase(),
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: pColor),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: pColor,
+                        ),
                       ),
                     ),
                   ],
@@ -515,11 +645,19 @@ class _ArtoReportCard extends StatelessWidget {
                   children: [
                     Text(
                       'Stage: $stageName',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                     Text(
                       '${(progress * 100).toInt()}% Done',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.ink500),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink500,
+                      ),
                     ),
                   ],
                 ),
