@@ -337,16 +337,101 @@ class ApiService {
 
   /// Returns null if no active lease, otherwise the lease details map.
   static Future<Map<String, dynamic>?> fetchLeaseStatus() async {
-    final data = await _getJson('lease_status.php', auth: true);
-    if (data['user'] != null && data['user'] is Map) {
-      final u = data['user'] as Map<String, dynamic>;
-      final prefs = await SharedPreferences.getInstance();
-      if (u['full_name'] != null) await prefs.setString('user_name', u['full_name']);
-      if (u['email'] != null) await prefs.setString('user_email', u['email']);
-      if (u['phone'] != null) await prefs.setString('user_phone', u['phone']);
+    try {
+      final data = await _getJson('lease_status.php', auth: true);
+      if (data['user'] != null && data['user'] is Map) {
+        final u = data['user'] as Map<String, dynamic>;
+        final prefs = await SharedPreferences.getInstance();
+        if (u['full_name'] != null) await prefs.setString('user_name', u['full_name']);
+        if (u['email'] != null) await prefs.setString('user_email', u['email']);
+        if (u['phone'] != null) await prefs.setString('user_phone', u['phone']);
+      }
+      if (data['has_lease'] == true && data['lease'] is Map) {
+        return Map<String, dynamic>.from(data['lease'] as Map);
+      }
+    } catch (_) {}
+
+    // Fallback: Check if user has an approved application in applications_mine.php
+    try {
+      final apps = await fetchMyApplications();
+      for (final item in apps) {
+        if (item is Map && (item['status'] ?? '').toString().toLowerCase() == 'approved') {
+          return {
+            'tenant_id': item['id'],
+            'application_id': item['id'],
+            'property_id': item['property_id'],
+            'property_name': item['property_name'] ?? 'Commercial Stall',
+            'property_address': item['property_address'] ?? 'Commercial Space',
+            'business_name': item['business_name'] ?? '',
+            'rent': (item['rent'] as num?)?.toDouble() ?? 12000.0,
+            'term_months': (item['term_months'] as num?)?.toInt() ?? 12,
+            'is_approved_application': true,
+          };
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  /// Returns all active commercial properties/stalls for the user (GlobeOne-style multi-account switcher)
+  static Future<List<Map<String, dynamic>>> fetchAllActiveLeases({Map<String, dynamic>? initialLease}) async {
+    final list = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addLease(Map<String, dynamic> l) {
+      final name = (l['property_name'] ?? l['name'] ?? '').toString().trim().toLowerCase();
+      final pId = (l['property_id'] ?? l['tenant_id'] ?? '').toString();
+      final key = name.isNotEmpty ? name : pId;
+      if (key.isNotEmpty && !seen.contains(key)) {
+        seen.add(key);
+        list.add(Map<String, dynamic>.from(l));
+      }
     }
-    if (data['has_lease'] != true) return null;
-    return data['lease'] as Map<String, dynamic>;
+
+    if (initialLease != null && initialLease.isNotEmpty) {
+      addLease(initialLease);
+    }
+
+    // 1. Try lease_status.php for multiple leases
+    try {
+      final data = await _getJson('lease_status.php', auth: true);
+      if (data['leases'] is List) {
+        for (final item in data['leases']) {
+          if (item is Map) addLease(Map<String, dynamic>.from(item));
+        }
+      } else if (data['lease'] is Map) {
+        addLease(Map<String, dynamic>.from(data['lease'] as Map));
+      }
+    } catch (_) {}
+
+    // 2. Query approved applications from applications_mine.php
+    try {
+      final apps = await fetchMyApplications();
+      for (final app in apps) {
+        if (app is Map && (app['status'] ?? '').toString().toLowerCase() == 'approved') {
+          addLease({
+            'tenant_id': app['id'],
+            'application_id': app['id'],
+            'property_id': app['property_id'],
+            'property_name': app['property_name'] ?? 'Commercial Stall',
+            'property_address': app['property_address'] ?? 'Commercial Space',
+            'business_name': app['business_name'] ?? '',
+            'rent': (app['rent'] as num?)?.toDouble() ?? 12000.0,
+            'term_months': (app['term_months'] as num?)?.toInt() ?? 12,
+            'cover_photo': app['cover_photo'] ?? '',
+            'is_approved_application': true,
+          });
+        }
+      }
+    } catch (_) {}
+
+    // If still empty but initialLease was given, ensure it is present
+    if (list.isEmpty && initialLease != null) {
+      list.add(Map<String, dynamic>.from(initialLease));
+    }
+
+    return list;
   }
 
   // ---------------- Maintenance tickets ----------------

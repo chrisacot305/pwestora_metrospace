@@ -3,11 +3,13 @@ import '../theme.dart';
 import '../services/api_service.dart';
 import 'tickets_list_screen.dart';
 import 'ticket_detail_screen.dart';
-import 'browse_screen.dart';
 import 'payment_arrangement_screen.dart';
 import 'rent_payment_screen.dart';
 import 'violation_notice_sheet.dart';
 import 'receipts_history_screen.dart';
+import 'messages_screen.dart';
+import 'my_applications_screen.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/luxury_rent_card.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -35,18 +37,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _companyName = '';
   bool _gateChecked = false;
 
+  // GlobeOne-style multi-account switcher state
+  List<Map<String, dynamic>> _allLeases = [];
+  int _selectedLeaseIndex = 0;
+  late PageController _cardPageController;
+
   @override
   void initState() {
     super.initState();
+    _cardPageController = PageController(viewportFraction: 0.94);
     _ticketsFuture = ApiService.fetchTickets();
     _arrangementsFuture = ApiService.fetchInstallmentRequests();
     _violationsFuture = ApiService.fetchViolations();
     _rentStatusFuture = ApiService.getDemoRentStatus();
     _loadUserName();
+    _loadAllLeases();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkPendingViolations();
     });
+  }
+
+  @override
+  void dispose() {
+    _cardPageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAllLeases() async {
+    try {
+      final list = await ApiService.fetchAllActiveLeases(initialLease: widget.lease);
+      if (mounted) {
+        setState(() {
+          _allLeases = list;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _allLeases = [widget.lease];
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> get _activeLease {
+    if (_allLeases.isNotEmpty && _selectedLeaseIndex < _allLeases.length) {
+      return _allLeases[_selectedLeaseIndex];
+    }
+    return widget.lease;
   }
 
   Future<void> _checkPendingViolations() async {
@@ -87,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _violationsFuture = ApiService.fetchViolations();
       _rentStatusFuture = ApiService.getDemoRentStatus();
     });
-    await Future.wait([_ticketsFuture, _arrangementsFuture, _violationsFuture]);
+    await Future.wait([_ticketsFuture, _arrangementsFuture, _violationsFuture, _loadAllLeases()]);
     widget.onRefresh();
   }
 
@@ -130,17 +169,113 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
 
-  void _openBrowseCatalog() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BrowseScreen()),
+
+
+
+
+  Widget _buildExpandBusinessCard(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF0F172A), const Color(0xFF0B1B3D)]
+              : [const Color(0xFF0B1B3D), const Color(0xFF162D63)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF1E6BFF).withValues(alpha: 0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0B1B3D).withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E6BFF).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF1E6BFF).withValues(alpha: 0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_business_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 5),
+                    Text(
+                      'BUSINESS EXPANSION',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 20),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'Expand to Another Space',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Browse prime retail stalls, kiosks, and commercial units to open your next branch.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF94A3B8),
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => widget.onNavigateTab?.call(2),
+              icon: const Icon(Icons.explore_rounded, size: 16),
+              label: const Text('Browse Available Stalls'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E6BFF),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final rentAmount = (widget.lease['rent'] as num?)?.toDouble() ?? 12000.0;
+    final rentAmount = (_activeLease['rent'] as num?)?.toDouble() ?? 12000.0;
     final now = DateTime.now();
     final currentMonthName = _getMonthName(now.month);
 
@@ -154,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ================= TOP HEADER (GREETING & PROFILE AVATAR) =================
+              // ================= TOP HEADER (PWESTORA BRAND & PROFILE AVATAR) =================
               Padding(
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top + 16,
@@ -165,107 +300,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
-                          final effectiveCompany = _companyName.isNotEmpty
-                              ? _companyName
-                              : (leaseCompany.isNotEmpty ? leaseCompany : '');
-                          final displayName = effectiveCompany.isNotEmpty
-                              ? effectiveCompany
-                              : (_userName.isNotEmpty ? _userName : 'Jake Peralta');
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                effectiveCompany.isNotEmpty ? 'COMMERCIAL SPACE' : 'WELCOME BACK',
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.electricBlue,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.white : const Color(0xFF111418),
-                                  letterSpacing: -0.6,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                "Let's manage your space today.",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                  letterSpacing: -0.1,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                    // Brand Logo + Pwestora Name (Prominent & bold)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'img/Frame 2.png',
+                          width: 26,
+                          height: 26,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Pwestora',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.white : const Color(0xFF111418),
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
+                    const Spacer(),
+
+                    // Chat Button (Option 6: Minimalist Outlined Rounded Balloon on Floating Disc)
                     InkWell(
                       borderRadius: BorderRadius.circular(22),
                       onTap: () {
-                        if (widget.onNavigateTab != null) {
-                          widget.onNavigateTab!(3); // Me / Profile tab
-                        }
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MessagesScreen(
+                              onNavigateTab: widget.onNavigateTab,
+                            ),
+                          ),
+                        );
                       },
                       child: Container(
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
                           border: Border.all(
-                            color: isDark ? const Color(0xFF262626) : Colors.white,
-                            width: 2,
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            width: 1.2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                              color: isDark
+                                  ? Colors.black.withValues(alpha: 0.35)
+                                  : const Color(0xFF0F172A).withValues(alpha: 0.07),
+                              blurRadius: 12,
+                              offset: const Offset(0, 3),
                             ),
                           ],
                         ),
-                        child: Center(
-                          child: Builder(
-                            builder: (context) {
-                              final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
-                              final effectiveCompany = _companyName.isNotEmpty
-                                  ? _companyName
-                                  : (leaseCompany.isNotEmpty ? leaseCompany : '');
-                              final displayInitial = effectiveCompany.isNotEmpty
-                                  ? effectiveCompany[0].toUpperCase()
-                                  : (_userName.isNotEmpty ? _userName[0].toUpperCase() : 'P');
-
-                              return Text(
-                                displayInitial,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            SvgPicture.asset(
+                              'img/comment-alt-dots.svg',
+                              width: 21,
+                              height: 21,
+                              colorFilter: ColorFilter.mode(
+                                isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F172A),
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2563EB),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                    width: 1.8,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -273,19 +400,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
 
-              // ================= STACKED LUXURY RENT CARD & RESTRUCTURING =================
+              // ================= STACKED LUXURY RENT CARD CAROUSEL (PAGEVIEW) =================
               FutureBuilder<String>(
                 future: _rentStatusFuture,
                 builder: (context, rentStatusSnap) {
                   final rentStatus = rentStatusSnap.data ?? 'normal';
                   final isOverdue = rentStatus == 'overdue';
                   final isGracePeriod = rentStatus == 'grace_period';
-                  final baseRent = rentAmount > 0 ? rentAmount : 12000.0;
-                  final effectiveRentAmount = isOverdue
-                      ? (baseRent * 2 + 500)
-                      : rentAmount;
                   final overdueSubtext = isOverdue ? 'October + November' : null;
 
                   return FutureBuilder<List<dynamic>>(
@@ -303,56 +426,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? '15 Nov ${now.year}'
                           : '30 $currentMonthName ${now.year}';
 
-                      final leaseCompany = widget.lease['business_name']?.toString().trim() ?? '';
-                      final effectiveCompany = _companyName.isNotEmpty
-                          ? _companyName
-                          : (leaseCompany.isNotEmpty ? leaseCompany : '');
-                      final cardTenantName = effectiveCompany.isNotEmpty
-                          ? effectiveCompany
-                          : (_userName.isNotEmpty ? _userName : (widget.lease['tenant_name']?.toString() ?? 'Jake Peralta'));
-
-                      final propertyName = (widget.lease['property_name']?.toString().trim().isNotEmpty == true)
-                          ? widget.lease['property_name'].toString().trim()
-                          : 'Commercial Property';
+                      final leaseList = _allLeases.isNotEmpty ? _allLeases : [widget.lease];
 
                       return Column(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: LuxuryRentCard(
-                              rentAmount: effectiveRentAmount,
-                              dueDate: effectiveDueDate,
-                              propertyName: propertyName,
-                              tenantName: cardTenantName,
-                              activeArrangement: hasRestructuring ? latest : null,
-                              isOverdue: isOverdue,
-                              isGracePeriod: isGracePeriod,
-                              graceDaysRemaining: 5,
-                              overdueSubtext: overdueSubtext,
-                              onArrangementTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => PaymentArrangementScreen(
-                                      lease: widget.lease,
-                                      onArrangementSubmitted: () => _refresh(),
-                                    ),
-                                  ),
-                                ).then((_) => _refresh());
+                          SizedBox(
+                            height: 232,
+                            child: PageView.builder(
+                              controller: _cardPageController,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: leaseList.length + 1,
+                              onPageChanged: (idx) {
+                                setState(() {
+                                  _selectedLeaseIndex = idx.clamp(0, leaseList.length - 1);
+                                });
                               },
-                              onPayRent: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => RentPaymentScreen(
-                                      lease: widget.lease,
-                                      rentAmount: baseRent,
-                                      isOverdue: isOverdue,
-                                      activeArrangement: hasRestructuring ? latest : null,
-                                      onPaymentSubmitted: () => _refresh(),
-                                    ),
+                              itemBuilder: (context, index) {
+                                if (index == leaseList.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                                    child: _buildExpandBusinessCard(isDark),
+                                  );
+                                }
+
+                                final leaseItem = leaseList[index];
+                                final itemRent = (leaseItem['rent'] as num?)?.toDouble() ?? 12000.0;
+                                final itemEffectiveRent = isOverdue ? (itemRent * 2 + 500) : itemRent;
+                                final itemCompany = (leaseItem['business_name'] ?? '').toString().trim();
+                                final itemEffectiveCompany = itemCompany.isNotEmpty
+                                    ? itemCompany
+                                    : (_companyName.isNotEmpty ? _companyName : '');
+                                final itemTenantName = itemEffectiveCompany.isNotEmpty
+                                    ? itemEffectiveCompany
+                                    : (_userName.isNotEmpty ? _userName : (leaseItem['tenant_name']?.toString() ?? 'Tenant'));
+                                final itemPropertyName = (leaseItem['property_name'] ?? 'Commercial Stall').toString();
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: LuxuryRentCard(
+                                    rentAmount: itemEffectiveRent,
+                                    dueDate: effectiveDueDate,
+                                    propertyName: itemPropertyName,
+                                    tenantName: itemTenantName,
+                                    activeArrangement: hasRestructuring ? latest : null,
+                                    isOverdue: isOverdue,
+                                    isGracePeriod: isGracePeriod,
+                                    graceDaysRemaining: 5,
+                                    overdueSubtext: overdueSubtext,
+                                    onArrangementTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => PaymentArrangementScreen(
+                                            lease: leaseItem,
+                                            onArrangementSubmitted: () => _refresh(),
+                                          ),
+                                        ),
+                                      ).then((_) => _refresh());
+                                    },
+                                    onPayRent: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => RentPaymentScreen(
+                                            lease: leaseItem,
+                                            rentAmount: itemRent,
+                                            isOverdue: isOverdue,
+                                            activeArrangement: hasRestructuring ? latest : null,
+                                            onPaymentSubmitted: () => _refresh(),
+                                          ),
+                                        ),
+                                      ).then((_) => _refresh());
+                                    },
                                   ),
-                                ).then((_) => _refresh());
+                                );
                               },
                             ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Animated Carousel Dots
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(leaseList.length + 1, (i) {
+                              final isSelected = i == _selectedLeaseIndex;
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                width: isSelected ? 22 : 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF1E6BFF)
+                                      : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              );
+                            }),
                           ),
 
                           // Active Restructuring Plan Strip (if any)
@@ -365,7 +534,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => PaymentArrangementScreen(
-                                        lease: widget.lease,
+                                        lease: _activeLease,
                                         onArrangementSubmitted: () => _refresh(),
                                       ),
                                     ),
@@ -520,7 +689,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => PaymentArrangementScreen(
-                                lease: widget.lease,
+                                lease: _activeLease,
                                 onArrangementSubmitted: () => _refresh(),
                               ),
                             ),
@@ -538,7 +707,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => ReceiptsHistoryScreen(
-                                lease: widget.lease,
+                                lease: _activeLease,
                                 rentAmount: rentAmount,
                               ),
                             ),
@@ -546,12 +715,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         },
                       ),
 
-                      // 3. Explore with Storefront Icon
+                      // 3. Applications with Assignment Icon (My Applications for business expansion)
                       _buildIslandActionItem(
                         isDark: isDark,
-                        icon: Icons.storefront_outlined,
-                        label: 'Explore',
-                        onTap: _openBrowseCatalog,
+                        icon: Icons.assignment_outlined,
+                        label: 'Applications',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MyApplicationsScreen(
+                                isTab: false,
+                                onLeaseMayHaveChanged: _refresh,
+                              ),
+                            ),
+                          ).then((_) => _refresh());
+                        },
                       ),
 
                       // 4. Maintenance with build_circle_outlined Icon
@@ -636,7 +814,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         title: 'Monthly Stall Rent',
                         subtitle: 'Due: 30 $currentMonthName ${now.year} • Active Lease',
                         trailing: '₱${_formatMoney(rentAmount)}',
-                        onTap: () => _showPayRentSheet(rentAmount),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => RentPaymentScreen(
+                                lease: _activeLease,
+                                rentAmount: rentAmount,
+                                onPaymentSubmitted: () => _refresh(),
+                              ),
+                            ),
+                          ).then((_) => _refresh());
+                        },
                       ),
 
                       // 2. Dynamic Maintenance Tickets from Backend
@@ -685,7 +873,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => PaymentArrangementScreen(
-                                        lease: widget.lease,
+                                        lease: _activeLease,
                                         onArrangementSubmitted: () => _refresh(),
                                       ),
                                     ),
@@ -891,205 +1079,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showPayRentSheet(double rentAmount, {String? reminderMessage}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            if (reminderMessage != null) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline_rounded, color: Color(0xFF1E6BFF), size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        reminderMessage,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E40AF),
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Pay Monthly Rent',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.midnightNavy,
-                  ),
-                ),
-                Text(
-                  '₱${_formatMoney(rentAmount)}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.midnightNavy,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Select preferred payment channel or request a plan:',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 20),
-            _buildPaymentOptionTile(
-              icon: Icons.account_balance_rounded,
-              title: 'Bank Transfer / InstaPay',
-              subtitle: 'BDO, BPI, UnionBank, Security Bank',
-              onTap: () {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Bank account details copied to clipboard.')),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildPaymentOptionTile(
-              icon: Icons.phone_android_rounded,
-              title: 'E-Wallet',
-              subtitle: 'GCash, Maya, ShopeePay',
-              onTap: () {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('E-wallet payment portal opening...')),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildPaymentOptionTile(
-              icon: Icons.handshake_outlined,
-              title: 'Request Payment Plan',
-              subtitle: 'Split rent into manageable installments',
-              isHighlight: true,
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PaymentArrangementScreen(
-                      lease: widget.lease,
-                      onArrangementSubmitted: () => _refresh(),
-                    ),
-                  ),
-                ).then((_) => _refresh());
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentOptionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool isHighlight = false,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isHighlight ? AppColors.warmIvory : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isHighlight ? const Color(0xFFE2C987) : const Color(0xFFE2E8F0),
-            width: isHighlight ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isHighlight ? AppColors.midnightNavy : Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: isHighlight ? Colors.white : AppColors.midnightNavy,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.midnightNavy,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-
 }
+
 

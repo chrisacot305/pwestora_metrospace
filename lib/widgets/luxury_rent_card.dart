@@ -10,8 +10,8 @@ class InspoCardClipper extends CustomClipper<Path> {
 
   const InspoCardClipper({
     this.radius = 24.0,
-    this.notchWidth = 126.0,
-    this.notchHeight = 48.0,
+    this.notchWidth = 152.0,
+    this.notchHeight = 52.0,
     this.filletRadius = 14.0,
   });
 
@@ -119,8 +119,8 @@ class LuxuryRentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const totalHeight = 224.0;
     const frontCardTop = 26.0;
-    const notchWidth = 126.0;
-    const notchHeight = 48.0;
+    const notchWidth = 152.0;
+    const notchHeight = 52.0;
 
     final status = (activeArrangement?['status'] ?? '').toString().toLowerCase();
     final planLabel = (activeArrangement?['plan_label'] ?? '').toString();
@@ -240,35 +240,49 @@ class LuxuryRentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top Row: Pwestora Logo + Brand Name (and small, subtle Due Date when restructuring)
+                    // Top Row: Building / Property Name (and small, subtle Due Date when restructuring)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Row(
-                          children: [
-                            Image.asset(
-                              'img/Frame 2.png',
-                              width: 20,
-                              height: 20,
-                              color: Colors.white,
-                              fit: BoxFit.contain,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Pwestora',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -0.3,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.domain_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  (propertyName != null && propertyName!.isNotEmpty)
+                                      ? propertyName!
+                                      : (tenantName.isNotEmpty ? tenantName : 'Commercial Space'),
+                                  style: const TextStyle(
+                                    fontSize: 18.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -0.4,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
 
                         // When in Restructuring Plan: small, subtle Due Date at top-right (no oval background, not full-looking)
-                        if (hasRestructuring)
+                        if (hasRestructuring) ...[
+                          const SizedBox(width: 8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -295,6 +309,7 @@ class LuxuryRentCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                        ],
                       ],
                     ),
 
@@ -501,18 +516,18 @@ class LuxuryRentCard extends StatelessWidget {
                       ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-                    // Bottom Row: Building / Property Name (constrained to never overlap the "+ Pay Rent" button)
+                    // Bottom Row: Business / Tenant Name (constrained to never overlap the "+ Pay Rent" button)
                     Padding(
-                      padding: const EdgeInsets.only(right: 125), // Safe buffer before the '+ Pay Rent' floating pill button
+                      padding: const EdgeInsets.only(right: 154), // Safe buffer before the wider '+ Pay Rent' floating pill button
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Building / Space',
+                            'Business / Tenant',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.w700,
                               color: Colors.white.withValues(alpha: 0.60),
                               letterSpacing: 0.3,
@@ -520,9 +535,7 @@ class LuxuryRentCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            (propertyName != null && propertyName!.isNotEmpty)
-                                ? propertyName!
-                                : (tenantName.isNotEmpty ? tenantName : 'Commercial Space'),
+                            tenantName.isNotEmpty ? tenantName : 'Active Lease',
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w800,
@@ -550,20 +563,20 @@ class LuxuryRentCard extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 onTap: onPayRent,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(26),
                 child: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  height: 44,
+                  padding: const EdgeInsets.fromLTRB(6, 5, 18, 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B0E14),
-                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(26),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: Colors.white.withValues(alpha: 0.18),
                       width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.22),
+                        color: Colors.black.withValues(alpha: 0.35),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -572,17 +585,27 @@ class LuxuryRentCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.add_rounded,
-                        color: Colors.white,
-                        size: 15,
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD9D9D9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.add,
+                            color: Colors.black,
+                            size: 20,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 9),
                       Text(
                         isOverdue ? 'Pay Balance' : 'Pay Rent',
                         style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: -0.2,
                         ),

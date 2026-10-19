@@ -68,6 +68,26 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: 4,
+        leading: AppBackButton(
+          isDark: isDark,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Maintenance & Reports',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: AppColors.ink900,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,
         backgroundColor: AppColors.primary,
@@ -78,42 +98,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
         ),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-              child: Row(
-                children: [
-                  if (Navigator.canPop(context))
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: AppBackButton(
-                        isDark: isDark,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      'Maintenance & Reports',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : AppColors.ink900,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _refresh,
-                color: AppColors.primary,
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        color: AppColors.primary,
         child: FutureBuilder<List<dynamic>>(
           future: _future,
           builder: (context, snapshot) {
@@ -428,11 +415,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           },
         ),
       ),
-    ),
-  ],
-),
-),
-);
+    );
   }
 }
 

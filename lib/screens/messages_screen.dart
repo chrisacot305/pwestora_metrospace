@@ -197,7 +197,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleSpacing: 16,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 20,
+                  color: Color(0xFF0B1B3D),
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        titleSpacing: Navigator.canPop(context) ? 0 : 16,
         title: Row(
           children: [
             // Avatar matching profile_screen.dart

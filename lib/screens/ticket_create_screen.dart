@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'messages_screen.dart';
@@ -25,6 +27,29 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
   bool _loading = false;
   String? _error;
   int? _createdTicketId;
+  final List<XFile> _attachedPhotos = [];
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (picked != null && mounted) {
+        setState(() {
+          _attachedPhotos.add(picked);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open camera or gallery: $e')),
+        );
+      }
+    }
+  }
 
   final List<Map<String, dynamic>> _categories = [
     {
@@ -123,10 +148,12 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
       try {
         final ticketFormatted = '#SL-${ticketId.toString().padLeft(5, '0')}';
         final descText = _descriptionCtrl.text.trim().isEmpty ? _selectedSymptom : _descriptionCtrl.text.trim();
+        final photoNote = _attachedPhotos.isNotEmpty ? '\nAttachments: ${_attachedPhotos.length} photo(s) attached' : '';
         await ApiService.sendMessage(
           '🛠️ Maintenance Report ($ticketFormatted)\n'
           'Category: $_selectedCategoryLabel • $_selectedSymptom\n'
-          'Description: $descText\n'
+          'Description: $descText'
+          '$photoNote\n'
           'Status: Pending Review',
         );
       } catch (_) {
@@ -574,61 +601,165 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
         const SizedBox(height: 20),
 
         // Attach Photo Box
-        const Text(
-          'Attach Photo',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.ink900,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Attach Photo',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink900,
+              ),
+            ),
+            if (_attachedPhotos.isNotEmpty)
+              Text(
+                '${_attachedPhotos.length} photo${_attachedPhotos.length > 1 ? 's' : ''} added',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.electricBlue,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 10),
 
-        Row(
-          children: [
-            // Dummy photo thumbnails
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Icon(Icons.image_outlined, color: Colors.white70, size: 24),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFF334155),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Icon(Icons.image_outlined, color: Colors.white70, size: 24),
-            ),
-            const SizedBox(width: 10),
-            // Add photo button
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Photo selected')),
-                );
-              },
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
+        SizedBox(
+          height: 72,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              // Direct Camera Button
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _pickPhoto(ImageSource.camera),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF93C5FD), width: 1.2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.camera_alt_rounded, color: Color(0xFF1E6BFF), size: 22),
+                      SizedBox(height: 3),
+                      Text(
+                        'Camera',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E40AF),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Icon(Icons.add_rounded, color: AppColors.electricBlue, size: 24),
               ),
-            ),
-          ],
+
+              // Upload from Gallery Button
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _pickPhoto(ImageSource.gallery),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border, width: 1.2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.photo_library_outlined, color: AppColors.ink700, size: 22),
+                      SizedBox(height: 3),
+                      Text(
+                        'Gallery',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Attached Photos with Delete button
+              ..._attachedPhotos.asMap().entries.map((entry) {
+                final index = entry.key;
+                final file = entry.value;
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.electricBlue, width: 1.5),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: FutureBuilder<Uint8List>(
+                          future: file.readAsBytes(),
+                          builder: (context, snap) {
+                            if (snap.connectionState == ConnectionState.done && snap.hasData) {
+                              return Image.memory(
+                                snap.data!,
+                                fit: BoxFit.cover,
+                                width: 72,
+                                height: 72,
+                              );
+                            }
+                            return Container(
+                              color: const Color(0xFF1E293B),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: -6,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _attachedPhotos.removeAt(index);
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
         ),
 
         const SizedBox(height: 32),
@@ -754,27 +885,69 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Attached Photo Thumbnail
-              Container(
-                width: double.infinity,
-                height: 140,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
+              // Attached Photo Thumbnail / Previews
+              if (_attachedPhotos.isNotEmpty) ...[
+                SizedBox(
+                  height: 120,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: _attachedPhotos.length,
+                    separatorBuilder: (_, index) => const SizedBox(width: 10),
+                    itemBuilder: (context, i) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: FutureBuilder<Uint8List>(
+                          future: _attachedPhotos[i].readAsBytes(),
+                          builder: (context, snap) {
+                            if (snap.connectionState == ConnectionState.done && snap.hasData) {
+                              return Image.memory(
+                                snap.data!,
+                                width: 140,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return Container(
+                              width: 140,
+                              height: 120,
+                              color: const Color(0xFF1E293B),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image_outlined, size: 36, color: Colors.white70),
-                    SizedBox(height: 6),
-                    Text(
-                      'Attached Photo Preview',
-                      style: TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
-                    ),
-                  ],
+              ] else ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.photo_outlined, size: 20, color: Color(0xFF94A3B8)),
+                      SizedBox(width: 8),
+                      Text(
+                        'No photos attached (Optional)',
+                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
 
               const SizedBox(height: 18),
 

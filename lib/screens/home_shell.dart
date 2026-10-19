@@ -7,7 +7,6 @@ import 'my_applications_screen.dart';
 import 'dashboard_screen.dart';
 import 'schedule_screen.dart';
 import 'ticket_create_screen.dart';
-import 'messages_screen.dart';
 import 'profile_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -20,7 +19,6 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
   int _applicantAppsTick = 0;
-  bool _isChatTyping = false;
   late Future<Map<String, dynamic>?> _leaseFuture;
 
   @override
@@ -74,11 +72,7 @@ class _HomeShellState extends State<HomeShell> {
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
                 ),
                 ScheduleScreen(lease: lease),
-                MessagesScreen(
-                  onNavigateTab: (idx) => setState(() => _currentIndex = idx),
-                  onTypingChanged: (typing) =>
-                      setState(() => _isChatTyping = typing),
-                ),
+                BrowseScreen(onLeaseMayHaveChanged: _recheckLease),
                 ProfileScreen(
                   lease: lease,
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
@@ -101,7 +95,7 @@ class _HomeShellState extends State<HomeShell> {
 
         final safeIndex = _currentIndex.clamp(0, screens.length - 1);
         final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-        final hideDock = isKeyboardOpen || (safeIndex == 2 && _isChatTyping);
+        final hideDock = isKeyboardOpen;
 
         return Scaffold(
           extendBody: true,
@@ -234,9 +228,9 @@ class _HomeShellState extends State<HomeShell> {
                           child: ScoopedNavItem(
                             index: 2,
                             currentIndex: currentIndex,
-                            icon: Icons.chat_bubble_rounded,
-                            outlineIcon: Icons.chat_bubble_outline_rounded,
-                            label: 'Chat',
+                            icon: Icons.explore_rounded,
+                            outlineIcon: Icons.explore_outlined,
+                            label: 'Explore',
                             onTap: (idx) => setState(() => _currentIndex = idx),
                           ),
                         ),
@@ -355,7 +349,7 @@ class _HomeShellState extends State<HomeShell> {
                       currentIndex: currentIndex,
                       icon: Icons.explore_rounded,
                       outlineIcon: Icons.explore_outlined,
-                      label: 'Browse',
+                      label: 'Explore',
                       onTap: (idx) => setState(() => _currentIndex = idx),
                     ),
                   ),
