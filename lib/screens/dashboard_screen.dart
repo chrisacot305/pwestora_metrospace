@@ -16,12 +16,18 @@ class DashboardScreen extends StatefulWidget {
   final Map<String, dynamic> lease;
   final VoidCallback onRefresh;
   final Function(int)? onNavigateTab;
+  final List<Map<String, dynamic>>? allLeases;
+  final int activeLeaseIndex;
+  final Function(int index, Map<String, dynamic> lease)? onLeaseChanged;
 
   const DashboardScreen({
     super.key,
     required this.lease,
     required this.onRefresh,
     this.onNavigateTab,
+    this.allLeases,
+    this.activeLeaseIndex = 0,
+    this.onLeaseChanged,
   });
 
   @override
@@ -40,12 +46,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // GlobeOne-style multi-account switcher state
   List<Map<String, dynamic>> _allLeases = [];
   int _selectedLeaseIndex = 0;
+  int _carouselPageIndex = 0;
   late PageController _cardPageController;
 
   @override
   void initState() {
     super.initState();
-    _cardPageController = PageController(viewportFraction: 0.94);
+    _selectedLeaseIndex = widget.activeLeaseIndex;
+    _carouselPageIndex = widget.activeLeaseIndex;
+    _cardPageController = PageController(
+      viewportFraction: 0.94,
+      initialPage: widget.activeLeaseIndex,
+    );
+    if (widget.allLeases != null && widget.allLeases!.isNotEmpty) {
+      _allLeases = widget.allLeases!;
+    }
     _ticketsFuture = ApiService.fetchTickets();
     _arrangementsFuture = ApiService.fetchInstallmentRequests();
     _violationsFuture = ApiService.fetchViolations();
@@ -59,6 +74,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.allLeases != null && widget.allLeases != oldWidget.allLeases) {
+      setState(() {
+        _allLeases = widget.allLeases!;
+      });
+    }
+    if (widget.activeLeaseIndex != _selectedLeaseIndex && _cardPageController.hasClients) {
+      setState(() {
+        _selectedLeaseIndex = widget.activeLeaseIndex;
+        _carouselPageIndex = widget.activeLeaseIndex;
+      });
+      _cardPageController.jumpToPage(widget.activeLeaseIndex);
+    }
+  }
+
+  @override
   void dispose() {
     _cardPageController.dispose();
     super.dispose();
@@ -66,11 +98,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadAllLeases() async {
     try {
-      final list = await ApiService.fetchAllActiveLeases(initialLease: widget.lease);
+      final list = (widget.allLeases != null && widget.allLeases!.isNotEmpty)
+          ? widget.allLeases!
+          : await ApiService.fetchAllActiveLeases(initialLease: widget.lease);
       if (mounted) {
         setState(() {
           _allLeases = list;
+          if (_selectedLeaseIndex >= _allLeases.length) {
+            _selectedLeaseIndex = 0;
+            _carouselPageIndex = 0;
+          }
         });
+        if (_allLeases.isNotEmpty && _selectedLeaseIndex < _allLeases.length) {
+          widget.onLeaseChanged?.call(_selectedLeaseIndex, _allLeases[_selectedLeaseIndex]);
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -438,7 +479,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               itemCount: leaseList.length + 1,
                               onPageChanged: (idx) {
                                 setState(() {
-                                  _selectedLeaseIndex = idx.clamp(0, leaseList.length - 1);
+                                  _carouselPageIndex = idx;
+                                  if (idx < leaseList.length) {
+                                    _selectedLeaseIndex = idx;
+                                    widget.onLeaseChanged?.call(idx, leaseList[idx]);
+                                  }
                                 });
                               },
                               itemBuilder: (context, index) {
@@ -508,7 +553,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: List.generate(leaseList.length + 1, (i) {
-                              final isSelected = i == _selectedLeaseIndex;
+                              final isSelected = i == _carouselPageIndex;
                               return AnimatedContainer(
                                 duration: const Duration(milliseconds: 250),
                                 margin: const EdgeInsets.symmetric(horizontal: 3),

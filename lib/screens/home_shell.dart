@@ -20,11 +20,29 @@ class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
   int _applicantAppsTick = 0;
   late Future<Map<String, dynamic>?> _leaseFuture;
+  List<Map<String, dynamic>> _allLeases = [];
+  int _activeLeaseIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _leaseFuture = ApiService.fetchLeaseStatus();
+    _loadAllLeases();
+  }
+
+  Future<void> _loadAllLeases() async {
+    try {
+      final initial = await _leaseFuture;
+      final leases = await ApiService.fetchAllActiveLeases(initialLease: initial);
+      if (mounted && leases.isNotEmpty) {
+        setState(() {
+          _allLeases = leases;
+          if (_activeLeaseIndex >= _allLeases.length) {
+            _activeLeaseIndex = 0;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _recheckLease() async {
@@ -33,6 +51,22 @@ class _HomeShellState extends State<HomeShell> {
     setState(() {
       _leaseFuture = Future.value(result);
     });
+    _loadAllLeases();
+  }
+
+  void _onBusinessSwiped(int newIndex, Map<String, dynamic> lease) {
+    if (_activeLeaseIndex != newIndex) {
+      setState(() {
+        _activeLeaseIndex = newIndex;
+      });
+    }
+  }
+
+  Map<String, dynamic>? get _activeLease {
+    if (_allLeases.isNotEmpty && _activeLeaseIndex < _allLeases.length) {
+      return _allLeases[_activeLeaseIndex];
+    }
+    return null;
   }
 
   void _openReportFlow(Map<String, dynamic>? lease) async {
@@ -60,21 +94,29 @@ class _HomeShellState extends State<HomeShell> {
           );
         }
 
-        final lease = snapshot.data;
-        final hasActiveLease = lease != null;
+        final initialLease = snapshot.data;
+        final hasActiveLease = initialLease != null;
+        final currentLease = _activeLease ?? initialLease;
 
         // Build screens based on user state
         final List<Widget> screens = hasActiveLease
             ? [
                 DashboardScreen(
-                  lease: lease,
+                  lease: currentLease!,
+                  allLeases: _allLeases,
+                  activeLeaseIndex: _activeLeaseIndex,
+                  onLeaseChanged: _onBusinessSwiped,
                   onRefresh: _recheckLease,
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
                 ),
-                ScheduleScreen(lease: lease),
+                ScheduleScreen(
+                  key: ValueKey('schedule_${currentLease['property_id'] ?? currentLease['id'] ?? _activeLeaseIndex}'),
+                  lease: currentLease,
+                ),
                 BrowseScreen(onLeaseMayHaveChanged: _recheckLease),
                 ProfileScreen(
-                  lease: lease,
+                  key: ValueKey('profile_${currentLease['property_id'] ?? currentLease['id'] ?? _activeLeaseIndex}'),
+                  lease: currentLease,
                   onNavigateTab: (idx) => setState(() => _currentIndex = idx),
                   onLeaseMayHaveChanged: _recheckLease,
                 ),
@@ -107,7 +149,7 @@ class _HomeShellState extends State<HomeShell> {
           bottomNavigationBar: hideDock
               ? null
               : (hasActiveLease
-                  ? _buildTenantDock(lease, safeIndex)
+                  ? _buildTenantDock(currentLease!, safeIndex)
                   : _buildApplicantDock(safeIndex)),
         );
       },

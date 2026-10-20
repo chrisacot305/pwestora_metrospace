@@ -30,6 +30,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     _fetchScheduleData();
   }
 
+  @override
+  void didUpdateWidget(covariant ScheduleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lease != widget.lease) {
+      _buildEventsForCurrentMonth();
+      _fetchScheduleData();
+    }
+  }
+
   Future<void> _fetchScheduleData() async {
     setState(() => _loading = true);
     try {
