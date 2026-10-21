@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
 import 'login_screen.dart';
 import 'lease_contract_screen.dart';
 import 'violation_notice_sheet.dart';
-import 'receipts_history_screen.dart';
 import 'payment_arrangement_screen.dart';
 import 'personal_info_screen.dart';
 
@@ -124,76 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _clearAppCache() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Row(
-          children: [
-            Icon(Icons.cleaning_services_rounded, color: AppColors.electricBlue, size: 22),
-            SizedBox(width: 10),
-            Text('Clear Cache & Refresh', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          ],
-        ),
-        content: const Text(
-          'This will clear local temporary cached assets and reload fresh platform data to ensure you have the latest updates.',
-          style: TextStyle(fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.ink500)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Clear & Reload', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
 
-    if (confirmed != true || !mounted) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-    final userName = prefs.getString('user_name');
-    final userId = prefs.getInt('user_id');
-    final userRole = prefs.getString('user_role');
-    await prefs.clear();
-    if (token != null) await prefs.setString('auth_token', token);
-    if (userName != null) await prefs.setString('user_name', userName);
-    if (userId != null) await prefs.setInt('user_id', userId);
-    if (userRole != null) await prefs.setString('user_role', userRole);
-
-    await _loadProfile();
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 3),
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle_rounded, color: AppColors.cyanGlow, size: 20),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Cache cleared! App refreshed with the latest data.',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -371,46 +300,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Tenant-Only Sections (Payments, Documents, Compliance, Demo)
+            // Tenant-Only Sections (Documents, Compliance, Demo, Settings)
             if (hasLease) ...[
-              // Section 2: Payments
-              _buildSectionHeader('Payments'),
-              _buildSectionGroup([
-                _buildMenuItem(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'Payment History',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReceiptsHistoryScreen(
-                          lease: widget.lease ?? {},
-                          rentAmount: (widget.lease?['monthly_rent'] as num?)?.toDouble() ?? 12000.0,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                _buildMenuItem(
-                  icon: Icons.description_outlined,
-                  title: 'Receipts',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReceiptsHistoryScreen(
-                          lease: widget.lease ?? {},
-                          rentAmount: (widget.lease?['monthly_rent'] as num?)?.toDouble() ?? 12000.0,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ]),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-              // Section 3: Documents & Compliance
+              // Section 2: Documents & Compliance
               _buildSectionHeader('Documents & Compliance'),
               _buildSectionGroup([
                 _buildStandingMenuItem(),
@@ -446,31 +338,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-              // Section 4: Conflict Resolution Demo Switcher (Section C)
+              // Section 3: Conflict Resolution Demo Switcher (Section C)
               _buildSectionHeader('Demo Mode: Conflict Resolution (Section C)'),
               _buildDemoSection(),
 
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-              // Section 5: Settings (Tenant)
+              // Section 4: Settings (Tenant)
               _buildSectionHeader('Settings'),
               _buildSectionGroup([
                 _buildThemeSwitchItem(),
-                _buildMenuItem(
-                  icon: Icons.notifications_none_rounded,
-                  title: 'Notifications',
-                  onTap: () => _showComingSoon('Notifications'),
-                ),
-                _buildMenuItem(
-                  icon: Icons.shield_outlined,
-                  title: 'Security',
-                  onTap: () => _showComingSoon('Security Settings'),
-                ),
-                _buildMenuItem(
-                  icon: Icons.cleaning_services_outlined,
-                  title: 'Clear Cache & Refresh',
-                  onTap: _clearAppCache,
-                ),
                 _buildMenuItem(
                   icon: Icons.help_outline_rounded,
                   title: 'Help & Support',

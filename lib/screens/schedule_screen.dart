@@ -20,6 +20,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   List<Map<String, dynamic>> _events = [];
   List<dynamic> _apiTickets = [];
   List<dynamic> _apiPayments = [];
+  List<dynamic> _apiInstallments = [];
 
   @override
   void initState() {
@@ -49,11 +50,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       final results = await Future.wait([
         ApiService.fetchTickets(tenantId: tenantId),
         ApiService.fetchPayments(tenantId: tenantId),
+        ApiService.fetchInstallmentRequests(tenantId: tenantId),
       ]);
       if (mounted) {
         setState(() {
           _apiTickets = results[0];
           _apiPayments = results[1];
+          _apiInstallments = results[2];
           _buildEventsForCurrentMonth();
           _loading = false;
         });
@@ -130,6 +133,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return buffer.toString();
   }
 
+  String _formatDate(dynamic dateVal) {
+    if (dateVal == null) return '';
+    DateTime? dt;
+    if (dateVal is DateTime) {
+      dt = dateVal;
+    } else {
+      dt = DateTime.tryParse(dateVal.toString());
+    }
+    if (dt == null) return dateVal.toString();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day.toString().padLeft(2, '0')}, ${dt.year}';
+  }
+
   void _buildEventsForCurrentMonth() {
     final list = <Map<String, dynamic>>[];
     final rentNum = (widget.lease?['rent'] as num?)?.toDouble() ?? 12000.0;
@@ -146,10 +165,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         final stageLabel = stage < kTicketStages.length
             ? kTicketStages[stage]
             : 'In Progress';
-        final contractor = t['contractor']?.toString();
-        final subtitle = (contractor != null && contractor.isNotEmpty)
-            ? 'Contractor: $contractor • $stageLabel'
-            : stageLabel;
+        final submittedDateStr = _formatDate(dt);
+        final subtitle = '$stageLabel • Submitted $submittedDateStr';
 
         String displayTitle = t['title']?.toString().trim() ?? '';
         if (displayTitle.startsWith('[')) {
@@ -205,12 +222,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           dt.year == _currentMonth.year &&
           dt.month == _currentMonth.month) {
         final amount = (p['amount'] as num?)?.toDouble() ?? 0.0;
-        final method = p['method']?.toString() ?? 'Payment';
+        final paidDateStr = _formatDate(dt);
 
         list.add({
           'id': 'pay_${p['id']}',
           'title': 'Monthly Rent Payment',
-          'subtitle': '₱${_formatMoney(amount)} • $method',
+          'subtitle': '₱${_formatMoney(amount)} Paid • $paidDateStr',
           'day': dt.day,
           'month': _getShortMonth(dt.month),
           'category': 'rent',
@@ -224,10 +241,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     // 3. Rent Due date from active lease
     if (widget.lease != null) {
       final lastDayOfMonth = _daysInMonth(_currentMonth);
+      final dueDateTime = DateTime(_currentMonth.year, _currentMonth.month, lastDayOfMonth);
+      final dueStr = _formatDate(dueDateTime);
       list.add({
         'id': 'rent_due_${_currentMonth.year}_${_currentMonth.month}',
         'title': 'Rent Due',
-        'subtitle': '₱${_formatMoney(rentNum)} • Monthly Rent',
+        'subtitle': '₱${_formatMoney(rentNum)} • Due $dueStr',
         'day': lastDayOfMonth,
         'month': _getShortMonth(_currentMonth.month),
         'category': 'rent',
@@ -235,6 +254,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         'color': AppColors.tagRent,
         'icon': Icons.account_balance_wallet_rounded,
       });
+    }
+
+    // 4. Restructuring Payment (Installments from API)
+    for (final inst in _apiInstallments) {
+      final status = (inst['status'] ?? '').toString().toLowerCase();
+      if (status == 'approved' || status == 'active' || status == 'pending') {
+        final partAmount = (inst['amount'] as num?)?.toDouble() ?? (rentNum / 2);
+        final currentPart = (inst['current_part'] as int?) ?? 1;
+        final instDate = DateTime(_currentMonth.year, _currentMonth.month, 15);
+        final dateStr = _formatDate(instDate);
+
+        list.add({
+          'id': 'installment_${inst['id']}_$currentPart',
+          'title': 'Restructuring Payment',
+          'subtitle': '₱${_formatMoney(partAmount)} Due • $dateStr',
+          'day': 15,
+          'month': _getShortMonth(_currentMonth.month),
+          'category': 'rent',
+          'categoryLabel': 'Restructuring',
+          'color': AppColors.tagRent,
+          'icon': Icons.handshake_outlined,
+        });
+      }
     }
 
     // Sort by day

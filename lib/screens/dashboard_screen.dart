@@ -62,9 +62,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _allLeases = widget.allLeases!;
     }
     final initialTid = widget.lease['tenant_id'] ?? widget.lease['id'];
-    final initialTenantId = initialTid is int ? initialTid : (initialTid != null ? int.tryParse(initialTid.toString()) : null);
+    final initialTenantId = initialTid is int
+        ? initialTid
+        : (initialTid != null ? int.tryParse(initialTid.toString()) : null);
     _ticketsFuture = ApiService.fetchTickets(tenantId: initialTenantId);
-    _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: initialTenantId);
+    _arrangementsFuture = ApiService.fetchInstallmentRequests(
+      tenantId: initialTenantId,
+    );
     _violationsFuture = ApiService.fetchViolations(tenantId: initialTenantId);
     _rentStatusFuture = ApiService.getDemoRentStatus();
     _loadUserName();
@@ -83,7 +87,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _allLeases = widget.allLeases!;
       });
     }
-    if (widget.activeLeaseIndex != _selectedLeaseIndex && _cardPageController.hasClients) {
+    if (widget.activeLeaseIndex != _selectedLeaseIndex &&
+        _cardPageController.hasClients) {
       setState(() {
         _selectedLeaseIndex = widget.activeLeaseIndex;
         _carouselPageIndex = widget.activeLeaseIndex;
@@ -112,7 +117,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         });
         if (_allLeases.isNotEmpty && _selectedLeaseIndex < _allLeases.length) {
-          widget.onLeaseChanged?.call(_selectedLeaseIndex, _allLeases[_selectedLeaseIndex]);
+          widget.onLeaseChanged?.call(
+            _selectedLeaseIndex,
+            _allLeases[_selectedLeaseIndex],
+          );
         }
       }
     } catch (_) {
@@ -133,13 +141,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int? get _activeTenantId {
     final tid = _activeLease['tenant_id'] ?? _activeLease['id'];
-    return tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+    return tid is int
+        ? tid
+        : (tid != null ? int.tryParse(tid.toString()) : null);
   }
 
   void _loadAccountFutures(int? tenantId) {
     setState(() {
       _ticketsFuture = ApiService.fetchTickets(tenantId: tenantId);
-      _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: tenantId);
+      _arrangementsFuture = ApiService.fetchInstallmentRequests(
+        tenantId: tenantId,
+      );
       _violationsFuture = ApiService.fetchViolations(tenantId: tenantId);
     });
   }
@@ -151,7 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final violations = await _violationsFuture;
       if (!mounted) return;
       // Find the highest unacknowledged violation
-      final unack = violations.where((v) => (v['acknowledged'] == 0 || v['acknowledged'] == false)).toList();
+      final unack = violations
+          .where((v) => (v['acknowledged'] == 0 || v['acknowledged'] == false))
+          .toList();
       if (unack.isNotEmpty) {
         final target = unack.first;
         await ViolationNoticeSheet.show(
@@ -183,14 +197,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _violationsFuture = ApiService.fetchViolations(tenantId: tid);
       _rentStatusFuture = ApiService.getDemoRentStatus();
     });
-    await Future.wait([_ticketsFuture, _arrangementsFuture, _violationsFuture, _loadAllLeases()]);
+    await Future.wait([
+      _ticketsFuture,
+      _arrangementsFuture,
+      _violationsFuture,
+      _loadAllLeases(),
+    ]);
     widget.onRefresh();
   }
 
   String _getMonthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[month - 1];
   }
@@ -207,28 +236,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return buffer.toString();
   }
 
+  String _formatDate(dynamic dateVal) {
+    if (dateVal == null) return '';
+    DateTime? dt;
+    if (dateVal is DateTime) {
+      dt = dateVal;
+    } else {
+      dt = DateTime.tryParse(dateVal.toString());
+    }
+    if (dt == null) return dateVal.toString();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day.toString().padLeft(2, '0')}, ${dt.year}';
+  }
+
   IconData _getReportCategoryIcon(String category) {
     final cat = category.toLowerCase();
-    if (cat.contains('elect') || cat.contains('light') || cat.contains('power')) {
+    if (cat.contains('elect') ||
+        cat.contains('light') ||
+        cat.contains('power')) {
       return Icons.bolt_rounded; // Lightning for electrical
-    } else if (cat.contains('plumb') || cat.contains('water') || cat.contains('leak') || cat.contains('pipe')) {
+    } else if (cat.contains('plumb') ||
+        cat.contains('water') ||
+        cat.contains('leak') ||
+        cat.contains('pipe')) {
       return Icons.water_drop_rounded;
-    } else if (cat.contains('comfort') || cat.contains('cr') || cat.contains('toilet') || cat.contains('bath')) {
+    } else if (cat.contains('comfort') ||
+        cat.contains('cr') ||
+        cat.contains('toilet') ||
+        cat.contains('bath')) {
       return Icons.bathtub_outlined;
-    } else if (cat.contains('ac') || cat.contains('hvac') || cat.contains('cool')) {
+    } else if (cat.contains('ac') ||
+        cat.contains('hvac') ||
+        cat.contains('cool')) {
       return Icons.ac_unit_rounded;
-    } else if (cat.contains('door') || cat.contains('lock') || cat.contains('key')) {
+    } else if (cat.contains('door') ||
+        cat.contains('lock') ||
+        cat.contains('key')) {
       return Icons.lock_outline_rounded;
-    } else if (cat.contains('clean') || cat.contains('trash') || cat.contains('pest')) {
+    } else if (cat.contains('clean') ||
+        cat.contains('trash') ||
+        cat.contains('pest')) {
       return Icons.cleaning_services_outlined;
     }
     return Icons.build_rounded;
   }
-
-
-
-
-
 
   Widget _buildExpandBusinessCard(bool isDark) {
     return Container(
@@ -243,7 +297,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF1E6BFF).withValues(alpha: 0.35), width: 1.2),
+        border: Border.all(
+          color: const Color(0xFF1E6BFF).withValues(alpha: 0.35),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0B1B3D).withValues(alpha: 0.25),
@@ -260,16 +317,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E6BFF).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF1E6BFF).withValues(alpha: 0.4)),
+                  border: Border.all(
+                    color: const Color(0xFF1E6BFF).withValues(alpha: 0.4),
+                  ),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add_business_rounded, size: 14, color: Colors.white),
+                    Icon(
+                      Icons.add_business_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                     SizedBox(width: 5),
                     Text(
                       'BUSINESS EXPANSION',
@@ -283,7 +349,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 20),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: Colors.white70,
+                size: 20,
+              ),
             ],
           ),
           Column(
@@ -319,7 +389,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 backgroundColor: const Color(0xFF1E6BFF),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
               ),
             ),
@@ -337,12 +409,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final currentMonthName = _getMonthName(now.month);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF7F8FA),
+      backgroundColor: isDark
+          ? const Color(0xFF000000)
+          : const Color(0xFFF7F8FA),
       body: RefreshIndicator(
         onRefresh: _refresh,
         color: AppColors.midnightNavy,
         child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -373,7 +449,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
-                            color: isDark ? Colors.white : const Color(0xFF111418),
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF111418),
                             letterSpacing: -0.6,
                           ),
                         ),
@@ -399,16 +477,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         height: 44,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.white,
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
                             width: 1.2,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: isDark
                                   ? Colors.black.withValues(alpha: 0.35)
-                                  : const Color(0xFF0F172A).withValues(alpha: 0.07),
+                                  : const Color(
+                                      0xFF0F172A,
+                                    ).withValues(alpha: 0.07),
                               blurRadius: 12,
                               offset: const Offset(0, 3),
                             ),
@@ -423,7 +507,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               width: 21,
                               height: 21,
                               colorFilter: ColorFilter.mode(
-                                isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F172A),
+                                isDark
+                                    ? const Color(0xFF60A5FA)
+                                    : const Color(0xFF0F172A),
                                 BlendMode.srcIn,
                               ),
                             ),
@@ -437,12 +523,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   color: const Color(0xFF2563EB),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                    color: isDark
+                                        ? const Color(0xFF1E293B)
+                                        : Colors.white,
                                     width: 1.8,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                                      color: const Color(
+                                        0xFF2563EB,
+                                      ).withValues(alpha: 0.4),
                                       blurRadius: 4,
                                       offset: const Offset(0, 1),
                                     ),
@@ -467,24 +557,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final rentStatus = rentStatusSnap.data ?? 'normal';
                   final isOverdue = rentStatus == 'overdue';
                   final isGracePeriod = rentStatus == 'grace_period';
-                  final overdueSubtext = isOverdue ? 'October + November' : null;
+                  final overdueSubtext = isOverdue
+                      ? 'October + November'
+                      : null;
 
                   return FutureBuilder<List<dynamic>>(
                     future: _arrangementsFuture,
                     builder: (context, snapshot) {
                       final reqs = snapshot.data ?? [];
-                      final latest = reqs.isNotEmpty ? (reqs.first as Map<String, dynamic>) : null;
-                      final status = (latest?['status'] ?? '').toString().toLowerCase();
+                      final latest = reqs.isNotEmpty
+                          ? (reqs.first as Map<String, dynamic>)
+                          : null;
+                      final status = (latest?['status'] ?? '')
+                          .toString()
+                          .toLowerCase();
                       final plan = latest?['plan_label'] ?? '2 payments';
                       final isApproved = status == 'approved';
                       final isPending = status == 'pending';
-                      final hasRestructuring = !isOverdue && (isApproved || isPending);
-                      final currentPart = (latest?['current_part'] as int?) ?? 1;
-                      final effectiveDueDate = hasRestructuring && isApproved && currentPart > 1
+                      final hasRestructuring =
+                          !isOverdue && (isApproved || isPending);
+                      final currentPart =
+                          (latest?['current_part'] as int?) ?? 1;
+                      final effectiveDueDate =
+                          hasRestructuring && isApproved && currentPart > 1
                           ? '15 Nov ${now.year}'
                           : '30 $currentMonthName ${now.year}';
 
-                      final leaseList = _allLeases.isNotEmpty ? _allLeases : [widget.lease];
+                      final leaseList = _allLeases.isNotEmpty
+                          ? _allLeases
+                          : [widget.lease];
 
                       return Column(
                         children: [
@@ -500,9 +601,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   if (idx < leaseList.length) {
                                     _selectedLeaseIndex = idx;
                                     final selectedLease = leaseList[idx];
-                                    widget.onLeaseChanged?.call(idx, selectedLease);
-                                    final tid = selectedLease['tenant_id'] ?? selectedLease['id'];
-                                    final int? newTenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+                                    widget.onLeaseChanged?.call(
+                                      idx,
+                                      selectedLease,
+                                    );
+                                    final tid =
+                                        selectedLease['tenant_id'] ??
+                                        selectedLease['id'];
+                                    final int? newTenantId = tid is int
+                                        ? tid
+                                        : (tid != null
+                                              ? int.tryParse(tid.toString())
+                                              : null);
                                     _loadAccountFutures(newTenantId);
                                   }
                                 });
@@ -510,57 +620,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               itemBuilder: (context, index) {
                                 if (index == leaseList.length) {
                                   return Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                    ),
                                     child: _buildExpandBusinessCard(isDark),
                                   );
                                 }
 
                                 final leaseItem = leaseList[index];
-                                final itemRent = (leaseItem['rent'] as num?)?.toDouble() ?? 12000.0;
-                                final itemEffectiveRent = isOverdue ? (itemRent * 2 + 500) : itemRent;
-                                final itemCompany = (leaseItem['business_name'] ?? '').toString().trim();
-                                final itemEffectiveCompany = itemCompany.isNotEmpty
+                                final itemRent =
+                                    (leaseItem['rent'] as num?)?.toDouble() ??
+                                    12000.0;
+                                final itemEffectiveRent = isOverdue
+                                    ? (itemRent * 2 + 500)
+                                    : itemRent;
+                                final itemCompany =
+                                    (leaseItem['business_name'] ?? '')
+                                        .toString()
+                                        .trim();
+                                final itemEffectiveCompany =
+                                    itemCompany.isNotEmpty
                                     ? itemCompany
-                                    : (_companyName.isNotEmpty ? _companyName : '');
-                                final itemTenantName = itemEffectiveCompany.isNotEmpty
+                                    : (_companyName.isNotEmpty
+                                          ? _companyName
+                                          : '');
+                                final itemTenantName =
+                                    itemEffectiveCompany.isNotEmpty
                                     ? itemEffectiveCompany
-                                    : (_userName.isNotEmpty ? _userName : (leaseItem['tenant_name']?.toString() ?? 'Tenant'));
-                                final itemPropertyName = (leaseItem['property_name'] ?? 'Commercial Stall').toString();
+                                    : (_userName.isNotEmpty
+                                          ? _userName
+                                          : (leaseItem['tenant_name']
+                                                    ?.toString() ??
+                                                'Tenant'));
+                                final itemPropertyName =
+                                    (leaseItem['property_name'] ??
+                                            'Commercial Stall')
+                                        .toString();
 
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                  ),
                                   child: LuxuryRentCard(
                                     rentAmount: itemEffectiveRent,
                                     dueDate: effectiveDueDate,
                                     propertyName: itemPropertyName,
                                     tenantName: itemTenantName,
-                                    activeArrangement: hasRestructuring ? latest : null,
+                                    activeArrangement: hasRestructuring
+                                        ? latest
+                                        : null,
                                     isOverdue: isOverdue,
                                     isGracePeriod: isGracePeriod,
                                     graceDaysRemaining: 5,
                                     overdueSubtext: overdueSubtext,
                                     onArrangementTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => PaymentArrangementScreen(
-                                            lease: leaseItem,
-                                            onArrangementSubmitted: () => _refresh(),
-                                          ),
-                                        ),
-                                      ).then((_) => _refresh());
+                                      Navigator.of(context)
+                                          .push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PaymentArrangementScreen(
+                                                    lease: leaseItem,
+                                                    onArrangementSubmitted:
+                                                        () => _refresh(),
+                                                  ),
+                                            ),
+                                          )
+                                          .then((_) => _refresh());
                                     },
                                     onPayRent: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => RentPaymentScreen(
-                                            lease: leaseItem,
-                                            rentAmount: itemRent,
-                                            isOverdue: isOverdue,
-                                            activeArrangement: hasRestructuring ? latest : null,
-                                            onPaymentSubmitted: () => _refresh(),
-                                          ),
-                                        ),
-                                      ).then((_) => _refresh());
+                                      Navigator.of(context)
+                                          .push(
+                                            MaterialPageRoute(
+                                              builder: (_) => RentPaymentScreen(
+                                                lease: leaseItem,
+                                                rentAmount: itemRent,
+                                                isOverdue: isOverdue,
+                                                activeArrangement:
+                                                    hasRestructuring
+                                                    ? latest
+                                                    : null,
+                                                onPaymentSubmitted: () =>
+                                                    _refresh(),
+                                              ),
+                                            ),
+                                          )
+                                          .then((_) => _refresh());
                                     },
                                   ),
                                 );
@@ -577,13 +721,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               final isSelected = i == _carouselPageIndex;
                               return AnimatedContainer(
                                 duration: const Duration(milliseconds: 250),
-                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
                                 width: isSelected ? 22 : 7,
                                 height: 7,
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? const Color(0xFF1E6BFF)
-                                      : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                                      : (isDark
+                                            ? const Color(0xFF334155)
+                                            : const Color(0xFFCBD5E1)),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               );
@@ -597,30 +745,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(14),
                                 onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => PaymentArrangementScreen(
-                                        lease: _activeLease,
-                                        onArrangementSubmitted: () => _refresh(),
-                                      ),
-                                    ),
-                                  ).then((_) => _refresh());
+                                  Navigator.of(context)
+                                      .push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              PaymentArrangementScreen(
+                                                lease: _activeLease,
+                                                onArrangementSubmitted: () =>
+                                                    _refresh(),
+                                              ),
+                                        ),
+                                      )
+                                      .then((_) => _refresh());
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                                    color: isApproved
+                                        ? const Color(0xFFECFDF5)
+                                        : const Color(0xFFFFFBEB),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+                                      color: isApproved
+                                          ? const Color(0xFFA7F3D0)
+                                          : const Color(0xFFFDE68A),
                                     ),
                                   ),
                                   child: Row(
                                     children: [
                                       Icon(
-                                        isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                                        isApproved
+                                            ? Icons.check_circle_rounded
+                                            : Icons.hourglass_top_rounded,
                                         size: 15,
-                                        color: isApproved ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                                        color: isApproved
+                                            ? const Color(0xFF10B981)
+                                            : const Color(0xFFD97706),
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
@@ -631,13 +794,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
-                                            color: isApproved ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                                            color: isApproved
+                                                ? const Color(0xFF065F46)
+                                                : const Color(0xFF92400E),
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
+                                      const Icon(
+                                        Icons.arrow_forward_ios_rounded,
+                                        size: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -676,20 +845,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _refresh();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: isEviction ? const Color(0xFFFEE2E2) : const Color(0xFFEFF6FF),
+                          color: isEviction
+                              ? const Color(0xFFFEE2E2)
+                              : const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: isEviction ? const Color(0xFFFCA5A5) : const Color(0xFFBFDBFE),
+                            color: isEviction
+                                ? const Color(0xFFFCA5A5)
+                                : const Color(0xFFBFDBFE),
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              isEviction ? Icons.gavel_rounded : Icons.info_outline_rounded,
+                              isEviction
+                                  ? Icons.gavel_rounded
+                                  : Icons.info_outline_rounded,
                               size: 15,
-                              color: isEviction ? AppColors.error : const Color(0xFF1E6BFF),
+                              color: isEviction
+                                  ? AppColors.error
+                                  : const Color(0xFF1E6BFF),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -697,18 +877,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 isEviction
                                     ? 'Final Notice: Lease Default (View Notice)'
                                     : (strike == 2
-                                        ? '2nd Notice: ₱500 Penalty Billed (View)'
-                                        : 'Formal Notice: 1 Infraction on Record (View)'),
+                                          ? '2nd Notice: ₱500 Penalty Billed (View)'
+                                          : 'Formal Notice: 1 Infraction on Record (View)'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: isEviction ? const Color(0xFF991B1B) : const Color(0xFF1E40AF),
+                                  color: isEviction
+                                      ? const Color(0xFF991B1B)
+                                      : const Color(0xFF1E40AF),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Color(0xFF64748B)),
+                            const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 11,
+                              color: Color(0xFF64748B),
+                            ),
                           ],
                         ),
                       ),
@@ -723,14 +909,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 18,
+                    horizontal: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF121212) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
+                    border: isDark
+                        ? Border.all(color: const Color(0xFF262626), width: 1)
+                        : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.35 : 0.04,
+                        ),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -747,19 +940,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 21,
                             fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : const Color(0xFF111418),
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF111418),
                           ),
                         ),
                         label: 'Payment Plan',
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => PaymentArrangementScreen(
-                                lease: _activeLease,
-                                onArrangementSubmitted: () => _refresh(),
-                              ),
-                            ),
-                          ).then((_) => _refresh());
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => PaymentArrangementScreen(
+                                    lease: _activeLease,
+                                    onArrangementSubmitted: () => _refresh(),
+                                  ),
+                                ),
+                              )
+                              .then((_) => _refresh());
                         },
                       ),
 
@@ -787,14 +984,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         icon: Icons.assignment_outlined,
                         label: 'Applications',
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => MyApplicationsScreen(
-                                isTab: false,
-                                onLeaseMayHaveChanged: _refresh,
-                              ),
-                            ),
-                          ).then((_) => _refresh());
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => MyApplicationsScreen(
+                                    isTab: false,
+                                    onLeaseMayHaveChanged: _refresh,
+                                  ),
+                                ),
+                              )
+                              .then((_) => _refresh());
                         },
                       ),
 
@@ -804,11 +1003,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         icon: Icons.build_circle_outlined,
                         label: 'Maintenance',
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TicketsListScreen(lease: _activeLease),
-                            ),
-                          ).then((_) => _refresh());
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      TicketsListScreen(lease: _activeLease),
+                                ),
+                              )
+                              .then((_) => _refresh());
                         },
                       ),
                     ],
@@ -825,10 +1027,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF121212) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
+                    border: isDark
+                        ? Border.all(color: const Color(0xFF262626), width: 1)
+                        : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.35 : 0.04,
+                        ),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -847,18 +1053,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
-                              color: isDark ? Colors.white : const Color(0xFF111418),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF111418),
                               letterSpacing: -0.4,
                             ),
                           ),
                           InkWell(
                             onTap: () {
                               Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => TicketsListScreen(lease: _activeLease)),
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      TicketsListScreen(lease: _activeLease),
+                                ),
                               );
                             },
                             child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
                               child: Text(
                                 'View All',
                                 style: TextStyle(
@@ -878,18 +1092,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         isDark: isDark,
                         icon: Icons.receipt_long_rounded,
                         title: 'Monthly Stall Rent',
-                        subtitle: 'Due: 30 $currentMonthName ${now.year} • Active Lease',
+                        subtitle:
+                            '₱${_formatMoney(rentAmount)} • Due ${_formatDate(DateTime(now.year, now.month, now.month == 2 ? 28 : 30))}',
                         trailing: '₱${_formatMoney(rentAmount)}',
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => RentPaymentScreen(
-                                lease: _activeLease,
-                                rentAmount: rentAmount,
-                                onPaymentSubmitted: () => _refresh(),
-                              ),
-                            ),
-                          ).then((_) => _refresh());
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => RentPaymentScreen(
+                                    lease: _activeLease,
+                                    rentAmount: rentAmount,
+                                    onPaymentSubmitted: () => _refresh(),
+                                  ),
+                                ),
+                              )
+                              .then((_) => _refresh());
                         },
                       ),
 
@@ -905,8 +1122,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               final ticket = t as Map<String, dynamic>;
                               return Column(
                                 children: [
-                                  Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
-                                  _buildTicketActivityRow(ticket, isDark: isDark),
+                                  Divider(
+                                    color: isDark
+                                        ? const Color(0xFF262626)
+                                        : const Color(0xFFF3F4F6),
+                                    height: 24,
+                                  ),
+                                  _buildTicketActivityRow(
+                                    ticket,
+                                    isDark: isDark,
+                                  ),
                                 ],
                               );
                             }).toList(),
@@ -922,28 +1147,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           if (reqs.isEmpty) return const SizedBox.shrink();
 
                           final latest = reqs.first as Map<String, dynamic>;
-                          final plan = latest['plan_label'] ?? 'Installment Plan';
-                          final status = (latest['status'] ?? 'pending').toString();
+                          final status = (latest['status'] ?? 'pending')
+                              .toString();
                           final isApproved = status.toLowerCase() == 'approved';
+                          final partAmount = (latest['amount'] as num?)?.toDouble() ?? (rentAmount / 2);
+                          final currentPart = (latest['current_part'] as int?) ?? 1;
+                          final partDueDate = DateTime(now.year, now.month + (currentPart > 1 ? 1 : 0), 15);
+                          final partDueStr = _formatDate(partDueDate);
 
                           return Column(
                             children: [
-                              Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
+                              Divider(
+                                color: isDark
+                                    ? const Color(0xFF262626)
+                                    : const Color(0xFFF3F4F6),
+                                height: 24,
+                              ),
                               _buildActivityRow(
                                 isDark: isDark,
-                                icon: isApproved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
-                                title: 'Payment Arrangement',
-                                subtitle: '$plan • $status',
+                                icon: isApproved
+                                    ? Icons.verified_rounded
+                                    : Icons.hourglass_top_rounded,
+                                title: 'Restructuring Payment',
+                                subtitle: '₱${_formatMoney(partAmount)} Due • $partDueStr',
                                 trailing: isApproved ? 'Active' : 'Pending',
                                 onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => PaymentArrangementScreen(
-                                        lease: _activeLease,
-                                        onArrangementSubmitted: () => _refresh(),
-                                      ),
-                                    ),
-                                  ).then((_) => _refresh());
+                                  Navigator.of(context)
+                                      .push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              PaymentArrangementScreen(
+                                                lease: _activeLease,
+                                                onArrangementSubmitted: () =>
+                                                    _refresh(),
+                                              ),
+                                        ),
+                                      )
+                                      .then((_) => _refresh());
                                 },
                               ),
                             ],
@@ -956,19 +1196,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         future: _violationsFuture,
                         builder: (context, snapshot) {
                           final violations = snapshot.data ?? [];
-                          if (violations.isEmpty) return const SizedBox.shrink();
+                          if (violations.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
 
                           final latest = violations.first;
                           final strike = latest['strike']?.toString() ?? '1';
+                          final fine = (latest['fine_amount'] as num?)?.toDouble() ?? 500.0;
+                          final dateIssued = _formatDate(latest['created_at'] ?? latest['issued_at'] ?? now);
 
                           return Column(
                             children: [
-                              Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6), height: 24),
+                              Divider(
+                                color: isDark
+                                    ? const Color(0xFF262626)
+                                    : const Color(0xFFF3F4F6),
+                                height: 24,
+                              ),
                               _buildActivityRow(
                                 isDark: isDark,
                                 icon: Icons.gavel_rounded,
                                 title: 'Notice of Infraction (Strike $strike)',
-                                subtitle: latest['rule_name']?.toString() ?? 'Lessor Policy Update',
+                                subtitle: '₱${_formatMoney(fine)} Billed • $dateIssued',
                                 trailing: 'Notice',
                                 onTap: () async {
                                   await ViolationNoticeSheet.show(
@@ -988,7 +1237,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
 
-
               // Bottom padding for dock
               const SizedBox(height: 100),
             ],
@@ -997,7 +1245,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
 
   Widget _buildIslandActionItem({
     IconData? icon,
@@ -1018,12 +1265,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF3F4F6),
+                color: isDark
+                    ? const Color(0xFF1E1E1E)
+                    : const Color(0xFFF3F4F6),
                 shape: BoxShape.circle,
-                border: isDark ? Border.all(color: const Color(0xFF262626), width: 1) : null,
+                border: isDark
+                    ? Border.all(color: const Color(0xFF262626), width: 1)
+                    : null,
               ),
               child: Center(
-                child: iconWidget ??
+                child:
+                    iconWidget ??
                     Icon(
                       icon,
                       color: isDark ? Colors.white : const Color(0xFF111418),
@@ -1037,7 +1289,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF4B5563),
                 letterSpacing: -0.1,
               ),
               textAlign: TextAlign.center,
@@ -1067,11 +1321,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF3F4F6),
+                color: isDark
+                    ? const Color(0xFF1E1E1E)
+                    : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(13),
-                border: isDark ? Border.all(color: const Color(0xFF262626), width: 0.8) : null,
+                border: isDark
+                    ? Border.all(color: const Color(0xFF262626), width: 0.8)
+                    : null,
               ),
-              child: Icon(icon, color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF111418), size: 20),
+              child: Icon(
+                icon,
+                color: isDark
+                    ? const Color(0xFF60A5FA)
+                    : const Color(0xFF111418),
+                size: 20,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1095,7 +1359,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w400,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF8A92A0),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF8A92A0),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1119,43 +1385,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTicketActivityRow(Map<String, dynamic> ticket, {bool isDark = false}) {
+  Widget _buildTicketActivityRow(
+    Map<String, dynamic> ticket, {
+    bool isDark = false,
+  }) {
     String title = ticket['title']?.toString().trim() ?? '';
     if (title.startsWith('[')) {
       final closeIdx = title.indexOf(']');
       if (closeIdx > 1) {
         final inside = title.substring(1, closeIdx);
-        title = inside.contains(' - ') ? inside.split(' - ').first.trim() : inside.trim();
+        title = inside.contains(' - ')
+            ? inside.split(' - ').first.trim()
+            : inside.trim();
       }
     }
     if (title.isEmpty) {
       final cat = ticket['category']?.toString() ?? 'General';
-      title = cat.isNotEmpty ? (cat[0].toUpperCase() + cat.substring(1)) : 'Maintenance Request';
+      title = cat.isNotEmpty
+          ? (cat[0].toUpperCase() + cat.substring(1))
+          : 'Maintenance Request';
     }
     final category = ticket['category']?.toString() ?? 'General';
-    final ticketId = '#SL-${(ticket['id'] ?? '00001').toString().padLeft(5, '0')}';
     final stageNum = (ticket['stage'] as num?)?.toInt() ?? 0;
-    final stageName = stageNum < kTicketStages.length ? kTicketStages[stageNum] : 'In Progress';
+    final stageName = stageNum < kTicketStages.length
+        ? kTicketStages[stageNum]
+        : 'In Progress';
     final icon = _getReportCategoryIcon(category.isNotEmpty ? category : title);
 
     final isResolved = stageNum >= kTicketStages.length - 1;
+
+    final submittedDateStr = _formatDate(ticket['created_at']);
+    final detailsSubtitle = submittedDateStr.isNotEmpty
+        ? '$stageName • Submitted $submittedDateStr'
+        : stageName;
 
     return _buildActivityRow(
       isDark: isDark,
       icon: icon,
       title: title,
-      subtitle: '$ticketId • $stageName',
+      subtitle: detailsSubtitle,
       trailing: isResolved ? 'Resolved' : 'In Progress',
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TicketDetailScreen(ticket: ticket),
-          ),
-        ).then((_) => _refresh());
+        Navigator.of(context)
+            .push(
+              MaterialPageRoute(
+                builder: (_) => TicketDetailScreen(ticket: ticket),
+              ),
+            )
+            .then((_) => _refresh());
       },
     );
   }
-
 }
-
-

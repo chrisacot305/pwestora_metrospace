@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'ticket_detail_screen.dart';
-import 'ticket_create_screen.dart';
 
 const kTicketStages = [
   'Submitted',
@@ -63,18 +62,25 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
     await _future;
   }
 
-  void _openCreate() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => TicketCreateScreen(lease: widget.lease),
-      ),
-    );
-    if (created == true) _refresh();
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bName = widget.lease?['property_name'] ??
+        widget.lease?['title'] ??
+        widget.lease?['property_title'] ??
+        '';
+    final stallNo = widget.lease?['stall_number'] ??
+        widget.lease?['unit_number'] ??
+        widget.lease?['stall_no'] ??
+        '';
+    final subtitleParts = [
+      if (stallNo.toString().isNotEmpty) 'Stall $stallNo',
+      if (bName.toString().isNotEmpty) bName.toString(),
+    ];
+    final buildingSubtitle = subtitleParts.isNotEmpty
+        ? subtitleParts.join(' • ')
+        : 'Stall Unit';
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
@@ -88,52 +94,31 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           isDark: isDark,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text(
-          'Maintenance & Reports',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: AppColors.ink900,
-            letterSpacing: -0.5,
-          ),
-        ),
-      ),
-      floatingActionButton: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF21447D), Color(0xFF142C56)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: const Color(0xFF1E6BFF).withValues(alpha: 0.45),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1E6BFF).withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Maintenance Status & Logs',
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+                color: isDark ? Colors.white : AppColors.ink900,
+                letterSpacing: -0.4,
+              ),
             ),
-            BoxShadow(
-              color: const Color(0xFF0A1832).withValues(alpha: 0.20),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+            const SizedBox(height: 2),
+            Text(
+              buildingSubtitle,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white60 : AppColors.ink500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: _openCreate,
-            child: const Center(
-              child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
-            ),
-          ),
         ),
       ),
       body: RefreshIndicator(
@@ -179,25 +164,37 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             }
 
             final tickets = (snapshot.data ?? []).cast<Map<String, dynamic>>();
+
+            bool isTicketRejected(Map<String, dynamic> t) {
+              final stage = (t['stage'] as num?)?.toInt() ?? 0;
+              final status = (t['status'] ?? '').toString().toLowerCase();
+              return stage < 0 || stage >= 8 || status == 'rejected' || status == 'declined';
+            }
+
+            bool isTicketResolved(Map<String, dynamic> t) {
+              if (isTicketRejected(t)) return false;
+              final stage = (t['stage'] as num?)?.toInt() ?? 0;
+              final status = (t['status'] ?? '').toString().toLowerCase();
+              return status == 'completed' || status == 'resolved' || stage == kTicketStages.length - 1;
+            }
+
+            bool isTicketInProgress(Map<String, dynamic> t) {
+              return !isTicketRejected(t) && !isTicketResolved(t);
+            }
+
             final total = tickets.length;
-            final inProgress = tickets.where((t) {
-              final stage = (t['stage'] as num?)?.toInt() ?? 0;
-              return stage < kTicketStages.length - 1;
-            }).length;
-            final resolved = tickets.where((t) {
-              final stage = (t['stage'] as num?)?.toInt() ?? 0;
-              return stage == kTicketStages.length - 1;
-            }).length;
+            final inProgress = tickets.where(isTicketInProgress).length;
+            final resolved = tickets.where(isTicketResolved).length;
+            final rejected = tickets.where(isTicketRejected).length;
 
             final resolveRate = total > 0
                 ? ((resolved / total) * 100).toInt()
                 : 100;
 
             final filteredTickets = tickets.where((t) {
-              final stage = (t['stage'] as num?)?.toInt() ?? 0;
-              final isDone = stage == kTicketStages.length - 1;
-              if (_filter == 'active') return !isDone;
-              if (_filter == 'completed') return isDone;
+              if (_filter == 'active') return isTicketInProgress(t);
+              if (_filter == 'completed') return isTicketResolved(t);
+              if (_filter == 'rejected') return isTicketRejected(t);
               return true;
             }).toList();
 
@@ -205,189 +202,154 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 90),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 40),
               children: [
-                // Arto Plus Executive Report Analytics Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppColors.primary, AppColors.primaryLight],
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.22),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Radial Progress Ring (Arto Plus Style)
-                      SizedBox(
-                        width: 76,
-                        height: 76,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CircularProgressIndicator(
-                              value: total > 0 ? (resolved / total) : 1.0,
-                              strokeWidth: 8,
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.15,
-                              ),
-                              valueColor: const AlwaysStoppedAnimation(
-                                Colors.greenAccent,
-                              ),
-                            ),
-                            Center(
-                              child: Text(
-                                '$resolveRate%',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
+                // 1. Clean, Non-gradient Circular Resolution Rate (Hero)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 116,
+                          height: 116,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              CircularProgressIndicator(
+                                value: total > 0 ? (resolved / total) : 1.0,
+                                strokeWidth: 9,
+                                backgroundColor: isDark
+                                    ? const Color(0xFF262626)
+                                    : const Color(0xFFE2E8F0),
+                                valueColor: AlwaysStoppedAnimation(
+                                  total == 0 || resolveRate == 100
+                                      ? AppColors.success
+                                      : AppColors.electricBlue,
                                 ),
                               ),
-                            ),
-                          ],
+                              Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$resolveRate%',
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        color: isDark
+                                            ? Colors.white
+                                            : AppColors.ink900,
+                                        letterSpacing: -0.6,
+                                      ),
+                                    ),
+                                    Text(
+                                      total == 0 ? 'ALL CLEAR' : 'RESOLVED',
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark
+                                            ? Colors.white60
+                                            : AppColors.ink500,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'RESOLUTION SCORE',
-                              style: TextStyle(
-                                color: AppColors.tint,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Property Health Report',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$resolved of $total maintenance reports fully resolved',
-                              style: const TextStyle(
-                                color: AppColors.tint,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 10),
+                        Text(
+                          total == 0
+                              ? 'No maintenance incidents reported'
+                              : '$resolved of $total reports resolved',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white70 : AppColors.ink500,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
+
                 const SizedBox(height: 16),
 
-                // Arto Plus Metric Summary Grid
+                // 2. The 4 Metric Boxes (2x2 Grid) with Tap-to-Filter
                 Row(
                   children: [
                     Expanded(
-                      child: _ArtoStatCard(
-                        title: 'Total Reports',
+                      child: _StatusStatBox(
+                        title: 'Total Logs',
                         count: '$total',
+                        hint: 'All records',
                         icon: Icons.receipt_long_rounded,
                         color: AppColors.primary,
-                        trend: 'Active Log',
+                        isSelected: _filter == 'all',
+                        onTap: () => setState(() => _filter = 'all'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _ArtoStatCard(
+                      child: _StatusStatBox(
                         title: 'In Progress',
                         count: '$inProgress',
-                        icon: Icons.pending_actions_rounded,
+                        hint: 'Action ongoing',
+                        icon: Icons.hourglass_top_rounded,
                         color: AppColors.warning,
-                        trend: 'Action Required',
+                        isSelected: _filter == 'active',
+                        onTap: () => setState(() => _filter = 'active'),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-
-                // Arto Plus Assigned People / Technicians Row
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: AppDecorations.card(radius: 16),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.people_alt_outlined,
-                        color: AppColors.primary,
-                        size: 20,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatusStatBox(
+                        title: 'Resolved',
+                        count: '$resolved',
+                        hint: 'Completed',
+                        icon: Icons.check_circle_outline_rounded,
+                        color: AppColors.success,
+                        isSelected: _filter == 'completed',
+                        onTap: () => setState(() => _filter = 'completed'),
                       ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Building Support & Contractors',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.ink900,
-                              ),
-                            ),
-                            Text(
-                              'Certified plumbers, electricians & HVAC on standby',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.ink500,
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatusStatBox(
+                        title: 'Rejected',
+                        count: '$rejected',
+                        hint: 'Declined',
+                        icon: Icons.cancel_outlined,
+                        color: AppColors.error,
+                        isSelected: _filter == 'rejected',
+                        onTap: () => setState(() => _filter = 'rejected'),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: AppDecorations.badge(
-                          bg: AppColors.accentSoft,
-                        ),
-                        child: const Text(
-                          '24/7 Support',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
 
-                // Status Segmented Control (All / Active / Completed)
+                const SizedBox(height: 18),
+
+                // 3. Status Segmented Control (All / In Progress / Resolved / Rejected)
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: isDark ? const Color(0xFF141414) : AppColors.surface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF262626)
+                          : AppColors.border,
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -406,43 +368,67 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                         active: _filter == 'completed',
                         onTap: () => setState(() => _filter = 'completed'),
                       ),
+                      _SegmentTab(
+                        title: 'Rejected ($rejected)',
+                        active: _filter == 'rejected',
+                        onTap: () => setState(() => _filter = 'rejected'),
+                      ),
                     ],
                   ),
                 ),
+
                 const SizedBox(height: 16),
 
+                // 4. Ticket List
                 if (filteredTickets.isEmpty) ...[
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 36),
                   Center(
                     child: Container(
-                      width: 64,
-                      height: 64,
+                      width: 60,
+                      height: 60,
                       decoration: AppDecorations.squircle(
-                        color: AppColors.accentSoft,
+                        color: isDark
+                            ? const Color(0xFF1E1E1E)
+                            : AppColors.accentSoft,
                       ),
-                      child: const Icon(
-                        Icons.build_outlined,
-                        size: 32,
-                        color: AppColors.primary,
+                      child: Icon(
+                        _filter == 'rejected'
+                            ? Icons.check_circle_outline
+                            : Icons.assignment_outlined,
+                        size: 30,
+                        color: _filter == 'rejected'
+                            ? AppColors.success
+                            : AppColors.primary,
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Center(
+                  Center(
                     child: Text(
-                      'No reports in this category',
+                      _filter == 'rejected'
+                          ? 'No rejected reports'
+                          : _filter == 'completed'
+                              ? 'No resolved reports yet'
+                              : _filter == 'active'
+                                  ? 'No active in-progress reports'
+                                  : 'No maintenance logs found',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15.5,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.ink900,
+                        color: isDark ? Colors.white : AppColors.ink900,
                       ),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Center(
+                  Center(
                     child: Text(
-                      'Tap "New Report" below to log an issue.',
-                      style: TextStyle(color: AppColors.ink500, fontSize: 13),
+                      _filter == 'rejected'
+                          ? 'All reported issues have been processed or are in review.'
+                          : 'Incidents submitted will appear here.',
+                      style: TextStyle(
+                        color: isDark ? Colors.white54 : AppColors.ink500,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ),
                 ] else ...[
@@ -457,74 +443,113 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   }
 }
 
-class _ArtoStatCard extends StatelessWidget {
+/// Interactive 2x2 Metric Stat Box with Tap-to-Filter
+class _StatusStatBox extends StatelessWidget {
   final String title;
   final String count;
+  final String hint;
   final IconData icon;
   final Color color;
-  final String trend;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const _ArtoStatCard({
+  const _StatusStatBox({
     required this.title,
     required this.count,
+    required this.hint,
     required this.icon,
     required this.color,
-    required this.trend,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: AppDecorations.card(radius: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF141414) : Colors.white;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? color
+                  : (isDark ? const Color(0xFF262626) : AppColors.border),
+              width: isSelected ? 2.0 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: AppDecorations.squircle(
-                  color: color.withValues(alpha: 0.12),
-                ),
-                child: Icon(icon, size: 20, color: color),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: AppDecorations.badge(bg: AppColors.bg),
-                child: Text(
-                  trend,
-                  style: const TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink500,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, size: 18, color: color),
                   ),
+                  Text(
+                    hint,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white54 : AppColors.ink400,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                count,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : AppColors.ink900,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected
+                      ? color
+                      : (isDark ? Colors.white70 : AppColors.ink700),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            count,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink500,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -580,12 +605,22 @@ class _ArtoReportCard extends StatelessWidget {
     final (pColor, pBg) =
         kPriorityColors[priority] ?? kPriorityColors['medium']!;
     final icon = kCategoryIcons[ticket['category']] ?? Icons.build_outlined;
-    final progress = kTicketStages.length > 1
-        ? stage / (kTicketStages.length - 1)
-        : 0.0;
-    final stageName = stage < kTicketStages.length
-        ? kTicketStages[stage]
-        : 'Stage $stage';
+    final isRejected = stage < 0 ||
+        stage >= 8 ||
+        (ticket['status'] ?? '').toString().toLowerCase() == 'rejected' ||
+        (ticket['status'] ?? '').toString().toLowerCase() == 'declined';
+
+    final progress = isRejected
+        ? 1.0
+        : (kTicketStages.length > 1
+            ? stage / (kTicketStages.length - 1)
+            : 0.0);
+
+    final stageName = isRejected
+        ? 'Declined / Rejected'
+        : (stage < kTicketStages.length
+            ? kTicketStages[stage]
+            : 'Stage $stage');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -673,11 +708,11 @@ class _ArtoReportCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${(progress * 100).toInt()}% Done',
-                      style: const TextStyle(
+                      isRejected ? 'Declined' : '${(progress * 100).toInt()}% Done',
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.ink500,
+                        color: isRejected ? AppColors.error : AppColors.ink500,
                       ),
                     ),
                   ],
@@ -688,9 +723,11 @@ class _ArtoReportCard extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: progress,
                     minHeight: 7,
-                    backgroundColor: AppColors.borderLight,
+                    backgroundColor: isRejected ? AppColors.errorSoft : AppColors.borderLight,
                     valueColor: AlwaysStoppedAnimation(
-                      progress >= 1.0 ? AppColors.success : AppColors.primary,
+                      isRejected
+                          ? AppColors.error
+                          : (progress >= 1.0 ? AppColors.success : AppColors.primary),
                     ),
                   ),
                 ),
