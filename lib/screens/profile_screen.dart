@@ -84,7 +84,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openLeaseStanding() async {
-    final violations = await ApiService.fetchViolations();
+    final tid = _leaseData?['tenant_id'] ?? _leaseData?['id'] ?? widget.lease?['tenant_id'] ?? widget.lease?['id'];
+    final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+    final violations = await ApiService.fetchViolations(tenantId: tenantId);
     if (!mounted) return;
     if (violations.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -298,7 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                        MaterialPageRoute(builder: (_) => LeaseContractScreen(lease: _leaseData ?? widget.lease)),
                       );
                     },
                     child: Container(
@@ -427,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: 'Lease Agreement',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                      MaterialPageRoute(builder: (_) => LeaseContractScreen(lease: _leaseData ?? widget.lease)),
                     );
                   },
                 ),
@@ -436,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: 'Contract Guidelines',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LeaseContractScreen()),
+                      MaterialPageRoute(builder: (_) => LeaseContractScreen(lease: _leaseData ?? widget.lease)),
                     );
                   },
                 ),

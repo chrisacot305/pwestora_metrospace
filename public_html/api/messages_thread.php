@@ -13,12 +13,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 $lessee = require_lessee_auth($pdo);
 
-$tenantStmt = $pdo->prepare(
-    'SELECT t.id AS tenant_id, t.lessor_id, u.company_name AS lessor_name
-     FROM tenants t JOIN users u ON u.id = t.lessor_id
-     WHERE t.lessee_id = ? ORDER BY t.created_at DESC LIMIT 1'
-);
-$tenantStmt->execute([$lessee['id']]);
+$tenantId = isset($_GET['tenant_id']) && (int)$_GET['tenant_id'] > 0 ? (int)$_GET['tenant_id'] : 0;
+
+if ($tenantId > 0) {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, u.company_name AS lessor_name
+         FROM tenants t JOIN users u ON u.id = t.lessor_id
+         WHERE t.lessee_id = ? AND t.id = ? LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id'], $tenantId]);
+} else {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, u.company_name AS lessor_name
+         FROM tenants t JOIN users u ON u.id = t.lessor_id
+         WHERE t.lessee_id = ? ORDER BY t.created_at DESC LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id']]);
+}
 $tenant = $tenantStmt->fetch();
 
 if (!$tenant) {

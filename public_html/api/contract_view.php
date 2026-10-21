@@ -17,19 +17,37 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 $lessee = require_lessee_auth($pdo);
 
-$stmt = $pdo->prepare(
-    "SELECT t.created_at AS since,
-            p.name AS property_name, p.address AS property_address, p.type AS property_type,
-            u.company_name AS lessor_name,
-            a.rent, a.term_months
-     FROM tenants t
-     JOIN properties p ON p.id = t.property_id
-     JOIN users u ON u.id = t.lessor_id
-     LEFT JOIN applications a ON a.id = t.application_id
-     WHERE t.lessee_id = ?
-     ORDER BY t.created_at DESC LIMIT 1"
-);
-$stmt->execute([$lessee['id']]);
+$tenantIdParam = isset($_GET['tenant_id']) && (int)$_GET['tenant_id'] > 0 ? (int)$_GET['tenant_id'] : 0;
+
+if ($tenantIdParam > 0) {
+    $stmt = $pdo->prepare(
+        "SELECT t.created_at AS since,
+                p.name AS property_name, p.address AS property_address, p.type AS property_type,
+                u.company_name AS lessor_name,
+                a.rent, a.term_months
+         FROM tenants t
+         JOIN properties p ON p.id = t.property_id
+         JOIN users u ON u.id = t.lessor_id
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ? AND t.id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$lessee['id'], $tenantIdParam]);
+} else {
+    $stmt = $pdo->prepare(
+        "SELECT t.created_at AS since,
+                p.name AS property_name, p.address AS property_address, p.type AS property_type,
+                u.company_name AS lessor_name,
+                a.rent, a.term_months
+         FROM tenants t
+         JOIN properties p ON p.id = t.property_id
+         JOIN users u ON u.id = t.lessor_id
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ?
+         ORDER BY t.created_at DESC LIMIT 1"
+    );
+    $stmt->execute([$lessee['id']]);
+}
 $lease = $stmt->fetch();
 
 if (!$lease) {

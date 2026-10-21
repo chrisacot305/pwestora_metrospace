@@ -8,6 +8,16 @@
 $lessorId = $user['id'];
 $error = '';
 
+// Redirect only while headers can still be sent. The dashboard often prints
+// the layout first, so Location + exit would otherwise leave a blank content area.
+$applicationsRedirect = static function (string $extra = '') {
+    $url = '/dashboard.php?page=applications' . $extra;
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+        exit;
+    }
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['application_id'])) {
     csrf_check();
     $appId  = (int) $_POST['application_id'];
@@ -74,12 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app
         }
     }
     if (!$error) {
-        header('Location: /dashboard.php?page=applications' . ($action === 'rebuttal' ? '&review=' . $appId : ''));
-        exit;
+        $applicationsRedirect($action === 'rebuttal' ? '&review=' . $appId : '');
     }
 }
 
-// Manually log a new application (until the tenant-facing app can submit these directly).
+// Manually log a new application
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_application'])) {
     csrf_check();
     $propertyId = (int) $_POST['property_id'];
@@ -99,8 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_application'])) {
             'INSERT INTO applications (property_id, lessor_id, tenant_name, business_name, term_months, rent)
              VALUES (?, ?, ?, ?, ?, ?)'
         )->execute([$propertyId, $lessorId, $tenantName, $business, $term, $rent]);
-        header('Location: /dashboard.php?page=applications');
-        exit;
+        $applicationsRedirect();
     }
 }
 
@@ -126,15 +134,53 @@ if ($reviewId) {
         if ((int) $a['id'] === $reviewId) { $reviewing = $a; break; }
     }
 }
+$loggingApp = isset($_GET['log']);
 ?>
-<h2 style="margin:0 0 4px;">Tenant Applications</h2>
-<p style="color:var(--ink-500); margin:0 0 20px;">Review and decide — every decision is logged with a timestamp.</p>
 
-<?php if ($error): ?>
+<div style="margin-bottom:20px;">
+  <h2 style="margin:0 0 4px;">Tenant Applications</h2>
+  <p style="color:var(--ink-500); margin:0;">Review and decide, every decision is logged with a timestamp.</p>
+</div>
+
+<?php if ($error && !$loggingApp && !$reviewing): ?>
   <div class="error-msg"><?= htmlspecialchars($error) ?></div>
 <?php endif; ?>
 
 <div class="card" style="padding:0; overflow:hidden; margin-bottom:28px;">
+  
+  <!-- FILTER BAR & LOG BUTTON -->
+  <div style="display:flex; gap:10px; flex-wrap:nowrap; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); overflow-x:auto;">
+    
+    <?php if ($applications): ?>
+      <div style="flex:1; min-width:220px; position:relative;">
+        <i class="bi bi-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-400); font-size:13px;"></i>
+        <input id="app-search" type="search" placeholder="Search applicant, business, or property..."
+               autocomplete="off"
+               style="width:100%; box-sizing:border-box; padding:8px 12px 8px 34px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:var(--bg); color:var(--ink-900);">
+      </div>
+    <?php else: ?>
+      <div style="flex:1;"></div>
+    <?php endif; ?>
+
+    <!-- MATCHED SIZING TO VIEW CONTRACT BUTTON -->
+    <a href="/dashboard.php?page=applications&log=1" class="btn btn-primary" style="width:auto; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; font-size:12px; flex-shrink:0;">
+      <i class="bi bi-plus-lg"></i> Log Application
+    </a>
+
+    <?php if ($applications): ?>
+      <select id="app-status-filter"
+              style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:#fff; color:var(--ink-900); min-width:140px; flex-shrink:0;">
+        <option value="">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <span id="app-filter-count" style="font-size:12.5px; color:var(--ink-500); white-space:nowrap; flex-shrink:0;"></span>
+    <?php endif; ?>
+    
+  </div>
+  <!-- END FILTER BAR -->
+
   <div class="table-scroll">
   <table>
     <thead><tr><th>Applicant</th><th>Property</th><th>Term</th><th>Rent</th><th>Documents</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
@@ -147,8 +193,16 @@ if ($reviewId) {
           if (!empty($a['sec_dti_path'])) $appDocs++;
           if (!empty($a['business_permit_path'])) $appDocs++;
           if (!empty($a['bir_cert_path'])) $appDocs++;
+          
+          // Generate hidden search text for this row
+          $searchBlob = strtolower(trim(implode(' ', array_filter([
+              $a['tenant_name'],
+              $a['business_name'] ?? '',
+              $a['property_name'] ?? '',
+              $a['status']
+          ]))));
       ?>
-        <tr>
+        <tr class="app-row" data-status="<?= htmlspecialchars($a['status']) ?>" data-search="<?= htmlspecialchars($searchBlob) ?>">
           <td style="font-weight:600;">
             <?= htmlspecialchars($a['tenant_name']) ?>
             <?php if ($a['business_name']): ?>
@@ -182,7 +236,7 @@ if ($reviewId) {
               <a class="btn btn-primary" style="padding:6px 14px; display:inline-flex;"
                  href="/dashboard.php?page=applications&review=<?= $a['id'] ?>">Review</a>
             <?php elseif ($a['status'] === 'approved' && $a['tenant_id']): ?>
-              <a class="btn" style="background:var(--bg); color:var(--ink-900); padding:6px 14px; display:inline-flex; border:1px solid var(--border);"
+              <a class="btn" style="background:var(--bg); color:var(--ink-900); padding:6px 14px; display:inline-flex; border:1px solid var(--border); font-size:12px;"
                  href="/lease_contract.php?tenant_id=<?= $a['tenant_id'] ?>" target="_blank">
                 <i class="bi bi-file-earmark-text"></i> View Contract
               </a>
@@ -190,53 +244,108 @@ if ($reviewId) {
           </td>
         </tr>
       <?php endforeach; endif; ?>
+        
+        <tr id="app-empty-filter" style="display:none;">
+          <td colspan="8" style="text-align:center; color:var(--ink-500);">No applications match your search or filter.</td>
+        </tr>
     </tbody>
   </table>
   </div>
 </div>
 
-<div class="card" style="max-width:480px;">
-  <p style="font-weight:700; font-size:14px; margin-bottom:4px;">Log an application</p>
-  <p style="font-size:12.5px; color:var(--ink-500); margin-bottom:16px;">
-    Received an inquiry by phone or in person? Log it here so it goes through the same review flow.
-  </p>
+<?php if ($applications): ?>
+<script>
+(function () {
+  var search = document.getElementById('app-search');
+  var status = document.getElementById('app-status-filter');
+  var count = document.getElementById('app-filter-count');
+  var empty = document.getElementById('app-empty-filter');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.app-row'));
+  var total = rows.length;
 
-  <?php if (!$verifiedProperties): ?>
-    <p style="font-size:13px; color:var(--ink-500);">You need at least one verified property before you can log applications.</p>
-  <?php else: ?>
-    <form method="POST">
-      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-      <input type="hidden" name="log_application" value="1">
-      <div class="field">
-        <label>Property</label>
-        <select name="property_id" required>
-          <option value="">Select property…</option>
-          <?php foreach ($verifiedProperties as $p): ?>
-            <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div class="field">
-        <label>Applicant Name</label>
-        <input type="text" name="tenant_name" required>
-      </div>
-      <div class="field">
-        <label>Business Name (optional)</label>
-        <input type="text" name="business_name">
-      </div>
-      <div class="field">
-        <label>Lease Term (months)</label>
-        <input type="number" name="term_months" min="1" required>
-      </div>
-      <div class="field">
-        <label>Monthly Rent (₱)</label>
-        <input type="number" name="rent" min="1" step="0.01" required>
-      </div>
-      <button class="btn btn-primary" type="submit">Log Application</button>
-    </form>
-  <?php endif; ?>
+  function applyFilter() {
+    var q = (search.value || '').trim().toLowerCase();
+    var st = status.value || '';
+    var shown = 0;
+
+    rows.forEach(function (row) {
+      var matchQ = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      var matchS = !st || row.getAttribute('data-status') === st;
+      var visible = matchQ && matchS;
+
+      row.style.display = visible ? '' : 'none';
+      if (visible) shown++;
+    });
+
+    if (empty) empty.style.display = shown ? 'none' : '';
+    if (count) {
+      count.textContent = (q || st) ? (shown + ' of ' + total) : (total + ' application' + (total === 1 ? '' : 's'));
+    }
+  }
+
+  search.addEventListener('input', applyFilter);
+  status.addEventListener('change', applyFilter);
+  applyFilter(); // Run on load
+})();
+</script>
+<?php endif; ?>
+
+<!-- LOG APPLICATION POPUP DRAWER -->
+<?php if ($loggingApp || ($error && !$reviewing)): ?>
+<div style="position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; justify-content:flex-end; z-index:50;">
+  <div style="background:#fff; width:440px; max-width:92vw; height:100%; padding:24px; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0;">Log an application</h3>
+      <a href="/dashboard.php?page=applications" style="font-size:20px; color:var(--ink-500); text-decoration:none;">&times;</a>
+    </div>
+    
+    <p style="font-size:12.5px; color:var(--ink-500); margin-bottom:16px;">
+      Received an inquiry by phone or in person? Log it here so it goes through the same review flow.
+    </p>
+
+    <?php if ($error): ?>
+      <div class="error-msg" style="margin-bottom:16px;"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+
+    <?php if (!$verifiedProperties): ?>
+      <p style="font-size:13px; color:var(--ink-500);">You need at least one verified property before you can log applications.</p>
+    <?php else: ?>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+        <input type="hidden" name="log_application" value="1">
+        <div class="field">
+          <label>Property</label>
+          <select name="property_id" required>
+            <option value="">Select property…</option>
+            <?php foreach ($verifiedProperties as $p): ?>
+              <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="field">
+          <label>Applicant Name</label>
+          <input type="text" name="tenant_name" required>
+        </div>
+        <div class="field">
+          <label>Business Name (optional)</label>
+          <input type="text" name="business_name">
+        </div>
+        <div class="field">
+          <label>Lease Term (months)</label>
+          <input type="number" name="term_months" min="1" required>
+        </div>
+        <div class="field">
+          <label>Monthly Rent (₱)</label>
+          <input type="number" name="rent" min="1" step="0.01" required>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">Log Application</button>
+      </form>
+    <?php endif; ?>
+  </div>
 </div>
+<?php endif; ?>
 
+<!-- REVIEW APPLICATION POPUP DRAWER -->
 <?php if ($reviewing): 
   require_once __DIR__ . '/../includes/lease_checklist.php';
   $negotiation = [];

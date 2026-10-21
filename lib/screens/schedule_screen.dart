@@ -42,9 +42,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Future<void> _fetchScheduleData() async {
     setState(() => _loading = true);
     try {
+      final tid = widget.lease?['tenant_id'] ?? widget.lease?['id'];
+      final int? tenantId = tid is int
+          ? tid
+          : (tid != null ? int.tryParse(tid.toString()) : null);
       final results = await Future.wait([
-        ApiService.fetchTickets(),
-        ApiService.fetchPayments(),
+        ApiService.fetchTickets(tenantId: tenantId),
+        ApiService.fetchPayments(tenantId: tenantId),
       ]);
       if (mounted) {
         setState(() {
@@ -65,23 +69,50 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   String _getShortMonth(int month) {
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
     return months[(month - 1).clamp(0, 11)];
   }
 
   IconData _getCategoryIcon(String category) {
     final cat = category.toLowerCase();
-    if (cat.contains('elect') || cat.contains('light') || cat.contains('power')) {
+    if (cat.contains('elect') ||
+        cat.contains('light') ||
+        cat.contains('power')) {
       return Icons.bolt_rounded;
-    } else if (cat.contains('plumb') || cat.contains('water') || cat.contains('leak') || cat.contains('pipe')) {
+    } else if (cat.contains('plumb') ||
+        cat.contains('water') ||
+        cat.contains('leak') ||
+        cat.contains('pipe')) {
       return Icons.water_drop_rounded;
-    } else if (cat.contains('comfort') || cat.contains('cr') || cat.contains('toilet') || cat.contains('bath')) {
+    } else if (cat.contains('comfort') ||
+        cat.contains('cr') ||
+        cat.contains('toilet') ||
+        cat.contains('bath')) {
       return Icons.bathtub_outlined;
-    } else if (cat.contains('ac') || cat.contains('hvac') || cat.contains('cool')) {
+    } else if (cat.contains('ac') ||
+        cat.contains('hvac') ||
+        cat.contains('cool')) {
       return Icons.ac_unit_rounded;
-    } else if (cat.contains('door') || cat.contains('lock') || cat.contains('key')) {
+    } else if (cat.contains('door') ||
+        cat.contains('lock') ||
+        cat.contains('key')) {
       return Icons.lock_outline_rounded;
-    } else if (cat.contains('clean') || cat.contains('trash') || cat.contains('pest')) {
+    } else if (cat.contains('clean') ||
+        cat.contains('trash') ||
+        cat.contains('pest')) {
       return Icons.cleaning_services_outlined;
     }
     return Icons.build_rounded;
@@ -101,7 +132,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   void _buildEventsForCurrentMonth() {
     final list = <Map<String, dynamic>>[];
-    final unit = widget.lease?['unit_label'] ?? 'Unit';
     final rentNum = (widget.lease?['rent'] as num?)?.toDouble() ?? 12000.0;
 
     // 1. Live Maintenance Tickets from API
@@ -113,15 +143,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (dt.year == _currentMonth.year && dt.month == _currentMonth.month) {
         final categoryStr = t['category']?.toString() ?? 'Maintenance';
         final stage = (t['stage'] as num?)?.toInt() ?? 0;
-        final stageLabel = stage < kTicketStages.length ? kTicketStages[stage] : 'In Progress';
+        final stageLabel = stage < kTicketStages.length
+            ? kTicketStages[stage]
+            : 'In Progress';
         final contractor = t['contractor']?.toString();
         final subtitle = (contractor != null && contractor.isNotEmpty)
             ? 'Contractor: $contractor • $stageLabel'
-            : '$unit • $stageLabel';
+            : stageLabel;
+
+        String displayTitle = t['title']?.toString().trim() ?? '';
+        if (displayTitle.startsWith('[')) {
+          final closeIdx = displayTitle.indexOf(']');
+          if (closeIdx > 1) {
+            final inside = displayTitle.substring(1, closeIdx);
+            displayTitle = inside.contains(' - ') ? inside.split(' - ').first.trim() : inside.trim();
+          }
+        }
+        if (displayTitle.isEmpty) {
+          final cat = t['category']?.toString().trim() ?? 'Maintenance';
+          displayTitle = cat.isNotEmpty ? (cat[0].toUpperCase() + cat.substring(1)) : 'Maintenance';
+        }
 
         list.add({
           'id': 'ticket_${t['id']}',
-          'title': t['title']?.toString() ?? 'Maintenance Request',
+          'title': displayTitle,
           'subtitle': subtitle,
           'day': dt.day,
           'month': _getShortMonth(dt.month),
@@ -135,26 +180,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
     // 2. Live Payments from API (or sample for demo)
     final now = DateTime.now();
-    final isPastOrCurrent = _currentMonth.year < now.year ||
+    final isPastOrCurrent =
+        _currentMonth.year < now.year ||
         (_currentMonth.year == now.year && _currentMonth.month <= now.month);
 
     final effectivePayments = _apiPayments.isNotEmpty
         ? _apiPayments
         : (isPastOrCurrent
-            ? [
-                {
-                  'id': 'hist_${_currentMonth.year}_${_currentMonth.month}',
-                  'amount': rentNum,
-                  'paid_at': '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-05 14:30:00',
-                  'method': 'GCash / InstaPay',
-                }
-              ]
-            : []);
+              ? [
+                  {
+                    'id': 'hist_${_currentMonth.year}_${_currentMonth.month}',
+                    'amount': rentNum,
+                    'paid_at':
+                        '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-05 14:30:00',
+                    'method': 'GCash / InstaPay',
+                  },
+                ]
+              : []);
 
     for (final p in effectivePayments) {
       final paidAtStr = p['paid_at']?.toString() ?? '';
       DateTime? dt = DateTime.tryParse(paidAtStr);
-      if (dt != null && dt.year == _currentMonth.year && dt.month == _currentMonth.month) {
+      if (dt != null &&
+          dt.year == _currentMonth.year &&
+          dt.month == _currentMonth.month) {
         final amount = (p['amount'] as num?)?.toDouble() ?? 0.0;
         final method = p['method']?.toString() ?? 'Payment';
 
@@ -195,7 +244,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   void _changeMonth(int offset) {
     setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + offset, 1);
+      _currentMonth = DateTime(
+        _currentMonth.year,
+        _currentMonth.month + offset,
+        1,
+      );
       _showAll = true;
       _buildEventsForCurrentMonth();
     });
@@ -213,8 +266,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   String _getMonthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[month - 1];
   }
@@ -231,8 +294,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final isCurrentMonth = _currentMonth.year == now.year && _currentMonth.month == now.month;
-    final selectedDay = (_selectedDate != null &&
+    final isCurrentMonth =
+        _currentMonth.year == now.year && _currentMonth.month == now.month;
+    final selectedDay =
+        (_selectedDate != null &&
             _selectedDate!.year == _currentMonth.year &&
             _selectedDate!.month == _currentMonth.month)
         ? _selectedDate!.day
@@ -291,7 +356,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF0B1B3D), size: 26),
+                          icon: const Icon(
+                            Icons.chevron_left_rounded,
+                            color: Color(0xFF0B1B3D),
+                            size: 26,
+                          ),
                           onPressed: () => _changeMonth(-1),
                         ),
                         Row(
@@ -310,16 +379,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               GestureDetector(
                                 onTap: _goToToday,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.electricBlue.withValues(alpha: 0.1),
+                                    color: AppColors.electricBlue.withValues(
+                                      alpha: 0.1,
+                                    ),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppColors.electricBlue.withValues(alpha: 0.3)),
+                                    border: Border.all(
+                                      color: AppColors.electricBlue.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                    ),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.today_rounded, size: 12, color: AppColors.electricBlue),
+                                      Icon(
+                                        Icons.today_rounded,
+                                        size: 12,
+                                        color: AppColors.electricBlue,
+                                      ),
                                       SizedBox(width: 4),
                                       Text(
                                         'Today',
@@ -337,7 +419,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           ],
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF0B1B3D), size: 26),
+                          icon: const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFF0B1B3D),
+                            size: 26,
+                          ),
                           onPressed: () => _changeMonth(1),
                         ),
                       ],
@@ -346,19 +432,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                     // Days of Week (Sun - Sat) full width
                     Row(
-                      children: const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                          .map((d) => Expanded(
-                                child: Text(
-                                  d,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF94A3B8),
+                      children:
+                          const [
+                                'Sun',
+                                'Mon',
+                                'Tue',
+                                'Wed',
+                                'Thu',
+                                'Fri',
+                                'Sat',
+                              ]
+                              .map(
+                                (d) => Expanded(
+                                  child: Text(
+                                    d,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF94A3B8),
+                                    ),
                                   ),
                                 ),
-                              ))
-                          .toList(),
+                              )
+                              .toList(),
                     ),
                     const SizedBox(height: 6),
 
@@ -372,7 +469,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _buildLegendItem('Rent', AppColors.tagRent),
-                        _buildLegendItem('Maintenance', AppColors.tagMaintenance),
+                        _buildLegendItem(
+                          'Maintenance',
+                          AppColors.tagMaintenance,
+                        ),
                         _buildLegendItem('Building', AppColors.tagBuilding),
                         _buildLegendItem('Other', AppColors.tagOther),
                       ],
@@ -425,14 +525,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(
-                    child: CircularProgressIndicator(color: AppColors.electricBlue),
+                    child: CircularProgressIndicator(
+                      color: AppColors.electricBlue,
+                    ),
                   ),
                 ),
               )
             else if (filteredEvents.isEmpty)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -442,17 +547,27 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.event_available_rounded, size: 38, color: Color(0xFFCBD5E1)),
+                        const Icon(
+                          Icons.event_available_rounded,
+                          size: 38,
+                          color: Color(0xFFCBD5E1),
+                        ),
                         const SizedBox(height: 10),
                         Text(
                           'No events on ${_getMonthName(_currentMonth.month)} $selectedDay',
-                          style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155)),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF334155),
+                          ),
                         ),
                         const SizedBox(height: 4),
                         const Text(
                           'Tap "View all" to see all scheduled events for this month.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                       ],
                     ),
@@ -463,20 +578,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final event = filteredEvents[index];
-                      return _buildEventCard(event);
-                    },
-                    childCount: filteredEvents.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final event = filteredEvents[index];
+                    return _buildEventCard(event);
+                  }, childCount: filteredEvents.length),
                 ),
               ),
 
             // Bottom space for floating dock
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -525,10 +635,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         }
 
         final day = index - offset + 1;
-        final isToday = _currentMonth.year == now.year &&
+        final isToday =
+            _currentMonth.year == now.year &&
             _currentMonth.month == now.month &&
             day == now.day;
-        final isSelected = !_showAll &&
+        final isSelected =
+            !_showAll &&
             _selectedDate != null &&
             _selectedDate!.year == _currentMonth.year &&
             _selectedDate!.month == _currentMonth.month &&
@@ -595,7 +707,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   !_showAll) {
                 _showAll = true;
               } else {
-                _selectedDate = DateTime(_currentMonth.year, _currentMonth.month, day);
+                _selectedDate = DateTime(
+                  _currentMonth.year,
+                  _currentMonth.month,
+                  day,
+                );
                 _showAll = false;
               }
             });

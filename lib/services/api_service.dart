@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Thrown whenever the API responds with ok:false or a non-2xx status.
@@ -328,8 +329,9 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> fetchContractView() async {
-    final data = await _getJson('contract_view.php', auth: true);
+  static Future<Map<String, dynamic>> fetchContractView({int? tenantId}) async {
+    final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+    final data = await _getJson('contract_view.php$query', auth: true);
     return data;
   }
 
@@ -436,29 +438,70 @@ class ApiService {
 
   // ---------------- Maintenance tickets ----------------
 
-  static Future<List<dynamic>> fetchTickets() async {
-    final data = await _getJson('tickets_list.php', auth: true);
-    return data['tickets'] as List<dynamic>;
+  static Future<List<dynamic>> fetchTickets({int? tenantId}) async {
+    try {
+      final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+      final data = await _getJson('tickets_list.php$query', auth: true);
+      return (data['tickets'] as List<dynamic>?) ?? [];
+    } catch (_) {
+      return [];
+    }
   }
 
   static Future<int> createTicket({
     required String category,
     required String priority,
     required String title,
+    int? tenantId,
+    List<XFile>? photos,
   }) async {
-    final data = await _postJson('tickets_create.php', {
+    if (photos != null && photos.isNotEmpty) {
+      final token = await getToken();
+      final uri = Uri.parse('$baseUrl/tickets_create.php');
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.fields['category'] = category;
+      request.fields['priority'] = priority;
+      request.fields['title'] = title;
+      if (tenantId != null && tenantId > 0) {
+        request.fields['tenant_id'] = tenantId.toString();
+      }
+
+      for (int i = 0; i < photos.length; i++) {
+        final photo = photos[i];
+        final bytes = await photo.readAsBytes();
+        final filename = photo.name.isNotEmpty ? photo.name : 'photo_$i.jpg';
+        request.files.add(
+          http.MultipartFile.fromBytes('photos[]', bytes, filename: filename),
+        );
+      }
+
+      final streamedRes = await request.send();
+      final res = await http.Response.fromStream(streamedRes);
+      final data = _handleResponse(res);
+      return data['ticket_id'] as int;
+    }
+
+    final payload = <String, dynamic>{
       'category': category,
       'priority': priority,
       'title': title,
-    }, auth: true);
+    };
+    if (tenantId != null && tenantId > 0) {
+      payload['tenant_id'] = tenantId;
+    }
+    final data = await _postJson('tickets_create.php', payload, auth: true);
     return data['ticket_id'] as int;
   }
 
   // ---------------- Payments ----------------
 
-  static Future<List<dynamic>> fetchPayments() async {
+  static Future<List<dynamic>> fetchPayments({int? tenantId}) async {
     try {
-      final data = await _getJson('payments_list.php', auth: true);
+      final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+      final data = await _getJson('payments_list.php$query', auth: true);
       return (data['payments'] as List<dynamic>?) ?? [];
     } catch (_) {
       return [];
@@ -470,14 +513,18 @@ class ApiService {
     required String target,
     required String referenceNo,
     String? note,
+    int? tenantId,
   }) async {
-    final payload = {
+    final payload = <String, dynamic>{
       'amount': amount,
       'method': 'bank_transfer',
       'target': target,
       'reference_no': referenceNo,
       'note': note ?? '',
     };
+    if (tenantId != null && tenantId > 0) {
+      payload['tenant_id'] = tenantId;
+    }
 
     // Post directly to the live server
     final res = await _postJson('payments_submit.php', payload, auth: true);
@@ -486,13 +533,18 @@ class ApiService {
 
   // ---------------- Messages ----------------
 
-  static Future<Map<String, dynamic>> fetchMessagesThread() async {
-    final data = await _getJson('messages_thread.php', auth: true);
+  static Future<Map<String, dynamic>> fetchMessagesThread({int? tenantId}) async {
+    final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+    final data = await _getJson('messages_thread.php$query', auth: true);
     return data;
   }
 
-  static Future<void> sendMessage(String text) async {
-    await _postJson('messages_send.php', {'body': text}, auth: true);
+  static Future<void> sendMessage(String text, {int? tenantId}) async {
+    final payload = <String, dynamic>{'body': text};
+    if (tenantId != null && tenantId > 0) {
+      payload['tenant_id'] = tenantId;
+    }
+    await _postJson('messages_send.php', payload, auth: true);
   }
 
   // ---------------- Installment / Payment Arrangements ----------------
@@ -513,7 +565,7 @@ class ApiService {
     }
   }
 
-  static Future<List<dynamic>> fetchInstallmentRequests() async {
+  static Future<List<dynamic>> fetchInstallmentRequests({int? tenantId}) async {
     // Check demo override first
     final demoPlan = await getDemoRestructuringPlan();
     if (demoPlan == '2_payments_part1' || demoPlan == '2_payments') {
@@ -575,7 +627,8 @@ class ApiService {
     }
 
     try {
-      final data = await _getJson('requests_list.php', auth: true);
+      final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+      final data = await _getJson('requests_list.php$query', auth: true);
       return data['requests'] as List<dynamic>? ?? [];
     } catch (_) {
       return [];
@@ -585,11 +638,16 @@ class ApiService {
   static Future<int> createInstallmentRequest({
     required String reason,
     required String planLabel,
+    int? tenantId,
   }) async {
-    final data = await _postJson('requests_create.php', {
+    final payload = <String, dynamic>{
       'reason': reason,
       'plan_label': planLabel,
-    }, auth: true);
+    };
+    if (tenantId != null && tenantId > 0) {
+      payload['tenant_id'] = tenantId;
+    }
+    final data = await _postJson('requests_create.php', payload, auth: true);
     return data['request_id'] as int;
   }
 
@@ -658,9 +716,10 @@ class ApiService {
     await prefs.setString(_kDemoStrikeCategoryKey, cat);
   }
 
-  static Future<List<Map<String, dynamic>>> fetchViolations() async {
+  static Future<List<Map<String, dynamic>>> fetchViolations({int? tenantId}) async {
     try {
-      final data = await _getJson('violations_list.php', auth: true);
+      final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
+      final data = await _getJson('violations_list.php$query', auth: true);
       final raw = (data['violations'] as List<dynamic>?) ?? [];
       if (raw.isNotEmpty) {
         return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();

@@ -11,11 +11,10 @@ $user = require_lessee_auth($pdo, true);
 json_ok([
     'user' => [
         'id'        => (int) $user['id'],
-        'full_name'    => $user['full_name'] ?? ($user['name'] ?? ''),
-        'company_name' => $user['company_name'] ?? '',
-        'email'        => $user['email'] ?? '',
-        'phone'        => $user['phone'] ?? '',
-        'role'         => $user['role'] ?? 'lessee',
-        'status'       => $user['status'] ?? 'active',
+        'full_name' => $user['full_name'] ?? ($user['name'] ?? ''),
+        'email'     => $user['email'] ?? '',
+        'phone'     => $user['phone'] ?? '',
+        'role'      => $user['role'] ?? 'lessee',
+        'status'    => $user['status'] ?? 'active',
     ],
 ]);

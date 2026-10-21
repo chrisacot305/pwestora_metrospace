@@ -34,7 +34,7 @@ if ($user['role'] === 'lessor') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?= APP_NAME ?> · <?= htmlspecialchars(ucfirst($page)) ?></title>
-<link rel="stylesheet" href="/assets/css/style.css?v=12">
+<link rel="stylesheet" href="/assets/css/style.css?v=13">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="icon" type="image/png" href="/assets/img/icon.png">
 <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=2">
@@ -68,6 +68,8 @@ if ($user['role'] === 'lessor') {
           <span class="role-pill" style="margin-left:8px;"><?= $roleLabel ?></span>
         </div>
       </div>
+      
+
       <div class="right">
         <?php if ($user['role'] === 'lessor'): ?>
         <div class="notif-wrap">

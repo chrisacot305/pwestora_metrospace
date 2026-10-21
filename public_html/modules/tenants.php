@@ -6,6 +6,7 @@
  */
 require_once __DIR__ . '/../includes/lease_checklist.php';
 $lessorId = $user['id'];
+$error = '';
 
 $tenants = $pdo->prepare(
     "SELECT t.id, t.tenant_name, t.created_at, t.application_id, p.name AS property_name,
@@ -104,6 +105,10 @@ if ($viewTermsId) {
 <h2 style="margin:0 0 4px;">Tenants</h2>
 <p style="color:var(--ink-500); margin:0 0 20px;">Your active roster and agreed checklist records.</p>
 
+<?php if ($error): ?>
+  <div class="error-msg"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
+
 <div class="kpi-grid">
   <div class="card">
     <div class="kpi-label">Total Active Tenants</div>
@@ -123,14 +128,44 @@ if ($viewTermsId) {
 </div>
 
 <div class="card" style="padding:0; overflow:hidden;">
+  <?php if ($tenants): ?>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border);">
+    <div style="flex:1; min-width:220px; position:relative;">
+      <i class="bi bi-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-400); font-size:13px;"></i>
+      <input id="tenant-search" type="search" placeholder="Search tenant, business, property, or contact…"
+             autocomplete="off"
+             style="width:100%; box-sizing:border-box; padding:8px 12px 8px 34px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:var(--bg); color:var(--ink-900);">
+    </div>
+    <select id="tenant-status-filter"
+            style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:#fff; color:var(--ink-900); min-width:160px;">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="expiring">Expiring (30d)</option>
+      <option value="ended">Lease ended</option>
+    </select>
+    <span id="tenant-filter-count" style="font-size:12.5px; color:var(--ink-500); white-space:nowrap;"></span>
+  </div>
+  <?php endif; ?>
   <div class="table-scroll">
   <table>
-    <thead><tr><th>Tenant</th><th>Property</th><th>Checklist</th><th>Lease Status</th><th>Contact</th><th>Move-in Date</th><th>Rent</th><th></th></tr></thead>
+    <thead><tr><th>Tenant</th><th>Property</th><th>Checklist</th><th>Lease Status</th><th>Contact</th><th>Move-in Date</th><th>End Date</th><th>Rent</th><th></th></tr></thead>
     <tbody>
       <?php if (!$tenants): ?>
-        <tr><td colspan="8" style="text-align:center; color:var(--ink-500);">No active tenants yet — approve an application to get started.</td></tr>
-      <?php else: foreach ($tenants as $t): ?>
-        <tr>
+        <tr><td colspan="9" style="text-align:center; color:var(--ink-500);">No active tenants yet — approve an application to get started.</td></tr>
+      <?php else: foreach ($tenants as $t):
+        $statusKey = 'active';
+        if ($t['status_label'] === 'Lease ended') $statusKey = 'ended';
+        elseif (strpos($t['status_label'], 'Expiring') === 0) $statusKey = 'expiring';
+        $searchBlob = strtolower(trim(implode(' ', array_filter([
+            $t['tenant_name'],
+            $t['business_name'] ?? '',
+            $t['property_name'] ?? '',
+            $t['lessee_email'] ?? '',
+            $t['lessee_phone'] ?? '',
+            $t['status_label'],
+        ]))));
+      ?>
+        <tr class="tenant-row" data-status="<?= htmlspecialchars($statusKey) ?>" data-search="<?= htmlspecialchars($searchBlob) ?>">
           <td style="font-weight:600;">
             <?= htmlspecialchars($t['tenant_name']) ?>
             <?php if (!empty($t['business_name'])): ?>
@@ -154,6 +189,9 @@ if ($viewTermsId) {
             <?php endif; ?>
           </td>
           <td style="color:var(--ink-500);"><?= (new DateTime($t['created_at']))->format('M j, Y') ?></td>
+          <td style="color:var(--ink-500);">
+            <?= $t['lease_end'] ? $t['lease_end']->format('M j, Y') : '<span style="color:var(--ink-300);">Unknown</span>' ?>
+          </td>
           <td style="color:var(--ink-500);">₱<?= number_format($t['rent'], 0) ?></td>
           <td>
             <div style="display:flex; gap:6px;">
@@ -169,10 +207,46 @@ if ($viewTermsId) {
           </td>
         </tr>
       <?php endforeach; endif; ?>
+        <tr id="tenant-empty-filter" style="display:none;">
+          <td colspan="9" style="text-align:center; color:var(--ink-500);">No tenants match your search or filter.</td>
+        </tr>
     </tbody>
   </table>
   </div>
 </div>
+<?php if ($tenants): ?>
+<script>
+(function () {
+  var search = document.getElementById('tenant-search');
+  var status = document.getElementById('tenant-status-filter');
+  var count = document.getElementById('tenant-filter-count');
+  var empty = document.getElementById('tenant-empty-filter');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.tenant-row'));
+  var total = rows.length;
+
+  function applyFilter() {
+    var q = (search.value || '').trim().toLowerCase();
+    var st = status.value || '';
+    var shown = 0;
+    rows.forEach(function (row) {
+      var matchQ = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      var matchS = !st || row.getAttribute('data-status') === st;
+      var visible = matchQ && matchS;
+      row.style.display = visible ? '' : 'none';
+      if (visible) shown++;
+    });
+    if (empty) empty.style.display = shown ? 'none' : '';
+    if (count) {
+      count.textContent = (q || st) ? (shown + ' of ' + total) : (total + ' tenant' + (total === 1 ? '' : 's'));
+    }
+  }
+
+  search.addEventListener('input', applyFilter);
+  status.addEventListener('change', applyFilter);
+  applyFilter();
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($viewingTenant): 
   $conv = [];
@@ -274,4 +348,3 @@ if ($viewTermsId) {
   </div>
 </div>
 <?php endif; ?>
-

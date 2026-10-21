@@ -24,13 +24,25 @@ if (!in_array($reason, $REASONS, true) || !in_array($plan, ['2 payments', '3 pay
     json_error('A valid reason and plan are required.');
 }
 
-$tenantStmt = $pdo->prepare(
-    'SELECT t.id AS tenant_id, t.lessor_id, a.rent
-     FROM tenants t
-     LEFT JOIN applications a ON a.id = t.application_id
-     WHERE t.lessee_id = ? ORDER BY t.created_at DESC LIMIT 1'
-);
-$tenantStmt->execute([$lessee['id']]);
+$reqTenantId = isset($body['tenant_id']) && (int)$body['tenant_id'] > 0 ? (int)$body['tenant_id'] : 0;
+
+if ($reqTenantId > 0) {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, a.rent
+         FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ? AND t.id = ? LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id'], $reqTenantId]);
+} else {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, a.rent
+         FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ? ORDER BY t.created_at DESC LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id']]);
+}
 $tenant = $tenantStmt->fetch();
 
 if (!$tenant) {

@@ -6,6 +6,13 @@
 require_once __DIR__ . '/../includes/mailer.php';
 $error = '';
 
+$propertiesRedirect = static function () {
+    if (!headers_sent()) {
+        header('Location: /dashboard.php?page=properties');
+        exit;
+    }
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['property_id'])) {
     csrf_check();
     $propertyId = (int) $_POST['property_id'];
@@ -27,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['pro
             audit_log($pdo, $user['id'], 'Rejected property verification', "Property #$propertyId");
             if ($propRow) send_property_status_email($propRow['email'], $propRow['full_name'], $propRow['name'], false);
         }
-        header('Location: /dashboard.php?page=properties');
-        exit;
+        $propertiesRedirect();
     } catch (Throwable $e) {
         error_log('Property verification decision failed: ' . $e->getMessage());
         $error = 'Could not process this decision — the error has been logged. Please try again.';

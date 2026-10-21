@@ -30,10 +30,10 @@ $isSuspended = $user['status'] === 'suspended';
       <?php if ($isSuspended): ?>
         <h1>Access temporarily suspended.</h1>
         <p>Your account has been suspended by a Pwestora administrator. This is
-           usually related to a platform policy issue — reach out to our team to resolve it.</p>
+           usually related to a platform policy issue, reach out to our team to resolve it.</p>
       <?php else: ?>
         <h1>You're almost in.</h1>
-        <p>Our team double-checks every business document by hand — it keeps
+        <p>Our team double-checks every business document by hand, it keeps
            the whole Pwestora marketplace trustworthy for tenants and lessors alike.</p>
       <?php endif; ?>
     </div>
@@ -56,7 +56,7 @@ $isSuspended = $user['status'] === 'suspended';
         <h2 class="auth-title">Account Under Review</h2>
         <p class="auth-sub">
           Thanks for registering, <?= htmlspecialchars($user['name']) ?>. Our team is
-          verifying your business documents. This usually takes 1–2 business days —
+          verifying your business documents. This usually takes 1–2 business days,
           we'll email you at <?= htmlspecialchars($user['email']) ?> once approved.
         </p>
       <?php endif; ?>

@@ -5,12 +5,14 @@ import '../theme.dart';
 import '../services/api_service.dart';
 
 class LeaseContractScreen extends StatefulWidget {
+  final Map<String, dynamic>? lease;
   final Map<String, dynamic>? applicationData;
   final bool forceInitialLock;
   final Future<void> Function()? onLeaseMayHaveChanged;
 
   const LeaseContractScreen({
     super.key,
+    this.lease,
     this.applicationData,
     this.forceInitialLock = false,
     this.onLeaseMayHaveChanged,
@@ -186,8 +188,11 @@ class _LeaseContractScreenState extends State<LeaseContractScreen> with SingleTi
       _loading = true;
     });
 
+    final tid = widget.lease?['tenant_id'] ?? widget.lease?['id'];
+    final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+
     try {
-      final res = await ApiService.fetchContractView();
+      final res = await ApiService.fetchContractView(tenantId: tenantId);
       if (!mounted) return;
 
       final hasLease = res['has_lease'] == true;

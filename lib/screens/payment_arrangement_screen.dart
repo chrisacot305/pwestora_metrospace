@@ -43,10 +43,15 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
     super.dispose();
   }
 
+  int? get _tenantId {
+    final tid = widget.lease['tenant_id'] ?? widget.lease['id'];
+    return tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+  }
+
   Future<void> _fetchRequests() async {
     setState(() => _loading = true);
     try {
-      final reqs = await ApiService.fetchInstallmentRequests();
+      final reqs = await ApiService.fetchInstallmentRequests(tenantId: _tenantId);
       if (mounted) {
         setState(() {
           _existingRequests = reqs;
@@ -77,6 +82,7 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
       await ApiService.createInstallmentRequest(
         reason: combinedReason,
         planLabel: _selectedPlan,
+        tenantId: _tenantId,
       );
 
       // Auto-post formal proposal details to the chat thread with lessor
@@ -88,6 +94,7 @@ class _PaymentArrangementScreenState extends State<PaymentArrangementScreen> {
           'Reason: $_selectedReason$notePart\n'
           'Schedule:\n$scheduleLines\n'
           'Status: Pending Review (48h Cooling-off Active)',
+          tenantId: _tenantId,
         );
       } catch (_) {
         // Chat notification is complementary; proceed even if message post fails

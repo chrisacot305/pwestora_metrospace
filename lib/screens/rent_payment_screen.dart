@@ -87,10 +87,15 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
     });
   }
 
+  int? get _tenantId {
+    final tid = widget.lease['tenant_id'] ?? widget.lease['id'];
+    return tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+  }
+
   Future<void> _fetchPaymentsHistory() async {
     setState(() => _loading = true);
     try {
-      final list = await ApiService.fetchPayments();
+      final list = await ApiService.fetchPayments(tenantId: _tenantId);
       if (mounted) {
         setState(() {
           _paymentsHistory = list;
@@ -171,6 +176,7 @@ class _RentPaymentScreenState extends State<RentPaymentScreen> {
         target: _selectedTarget,
         referenceNo: ref.isNotEmpty ? ref : 'IMG-RECEIPT-${DateTime.now().millisecondsSinceEpoch % 10000}',
         note: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
+        tenantId: _tenantId,
       );
 
       if (widget.isOverdue && (_selectedTarget == 'overdue_october' || _selectedTarget == 'full_balance')) {

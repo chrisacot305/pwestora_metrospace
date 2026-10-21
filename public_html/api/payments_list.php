@@ -13,14 +13,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $lessee = require_lessee_auth($pdo, true);
 
 $lesseeName = $lessee['full_name'] ?? ($lessee['name'] ?? '');
-$tenantStmt = $pdo->prepare(
-    'SELECT t.id FROM tenants t
-     LEFT JOIN applications a ON a.id = t.application_id
-     WHERE t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?
-     ORDER BY t.created_at DESC LIMIT 1'
-);
-$tenantStmt->execute([$lessee['id'], $lesseeName, $lessee['id']]);
-$tenantId = $tenantStmt->fetchColumn();
+$tenantIdParam = isset($_GET['tenant_id']) && (int)$_GET['tenant_id'] > 0 ? (int)$_GET['tenant_id'] : 0;
+
+if ($tenantIdParam > 0) {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE (t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?) AND t.id = ? LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id'], $lesseeName, $lessee['id'], $tenantIdParam]);
+    $tenantId = $tenantStmt->fetchColumn();
+} else {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?
+         ORDER BY t.created_at DESC LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id'], $lesseeName, $lessee['id']]);
+    $tenantId = $tenantStmt->fetchColumn();
+}
 
 if (!$tenantId) {
     $fallbackStmt = $pdo->query('SELECT id FROM tenants ORDER BY id DESC LIMIT 1');
@@ -42,6 +54,17 @@ foreach ($payments as &$p) {
     $p['amount'] = (float) $p['amount'];
     $isPending = ($p['logged_by'] === null || (is_string($p['note'] ?? '') && str_starts_with($p['note'], '[PENDING]')));
     $p['status'] = $isPending ? 'pending' : 'approved';
+
+    $refNo = '';
+    $target = '';
+    if (preg_match('/Ref:\s*([^|\r\n]+)/i', $p['note'] ?? '', $m)) {
+        $refNo = trim($m[1]);
+    }
+    if (preg_match('/Target:\s*([^|\r\n]+)/i', $p['note'] ?? '', $m)) {
+        $target = trim($m[1]);
+    }
+    $p['reference_no'] = $refNo;
+    $p['target'] = $target;
 }
 
 json_ok(['payments' => $payments]);

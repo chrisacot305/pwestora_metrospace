@@ -61,9 +61,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (widget.allLeases != null && widget.allLeases!.isNotEmpty) {
       _allLeases = widget.allLeases!;
     }
-    _ticketsFuture = ApiService.fetchTickets();
-    _arrangementsFuture = ApiService.fetchInstallmentRequests();
-    _violationsFuture = ApiService.fetchViolations();
+    final initialTid = widget.lease['tenant_id'] ?? widget.lease['id'];
+    final initialTenantId = initialTid is int ? initialTid : (initialTid != null ? int.tryParse(initialTid.toString()) : null);
+    _ticketsFuture = ApiService.fetchTickets(tenantId: initialTenantId);
+    _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: initialTenantId);
+    _violationsFuture = ApiService.fetchViolations(tenantId: initialTenantId);
     _rentStatusFuture = ApiService.getDemoRentStatus();
     _loadUserName();
     _loadAllLeases();
@@ -129,6 +131,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return widget.lease;
   }
 
+  int? get _activeTenantId {
+    final tid = _activeLease['tenant_id'] ?? _activeLease['id'];
+    return tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+  }
+
+  void _loadAccountFutures(int? tenantId) {
+    setState(() {
+      _ticketsFuture = ApiService.fetchTickets(tenantId: tenantId);
+      _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: tenantId);
+      _violationsFuture = ApiService.fetchViolations(tenantId: tenantId);
+    });
+  }
+
   Future<void> _checkPendingViolations() async {
     if (_gateChecked) return;
     _gateChecked = true;
@@ -161,10 +176,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _refresh() async {
+    final tid = _activeTenantId;
     setState(() {
-      _ticketsFuture = ApiService.fetchTickets();
-      _arrangementsFuture = ApiService.fetchInstallmentRequests();
-      _violationsFuture = ApiService.fetchViolations();
+      _ticketsFuture = ApiService.fetchTickets(tenantId: tid);
+      _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: tid);
+      _violationsFuture = ApiService.fetchViolations(tenantId: tid);
       _rentStatusFuture = ApiService.getDemoRentStatus();
     });
     await Future.wait([_ticketsFuture, _arrangementsFuture, _violationsFuture, _loadAllLeases()]);
@@ -372,6 +388,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => MessagesScreen(
+                              lease: _activeLease,
                               onNavigateTab: widget.onNavigateTab,
                             ),
                           ),
@@ -482,7 +499,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   _carouselPageIndex = idx;
                                   if (idx < leaseList.length) {
                                     _selectedLeaseIndex = idx;
-                                    widget.onLeaseChanged?.call(idx, leaseList[idx]);
+                                    final selectedLease = leaseList[idx];
+                                    widget.onLeaseChanged?.call(idx, selectedLease);
+                                    final tid = selectedLease['tenant_id'] ?? selectedLease['id'];
+                                    final int? newTenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+                                    _loadAccountFutures(newTenantId);
                                   }
                                 });
                               },
@@ -785,7 +806,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => const TicketsListScreen(),
+                              builder: (_) => TicketsListScreen(lease: _activeLease),
                             ),
                           ).then((_) => _refresh());
                         },
@@ -833,7 +854,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           InkWell(
                             onTap: () {
                               Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const TicketsListScreen()),
+                                MaterialPageRoute(builder: (_) => TicketsListScreen(lease: _activeLease)),
                               );
                             },
                             child: const Padding(
@@ -1099,7 +1120,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildTicketActivityRow(Map<String, dynamic> ticket, {bool isDark = false}) {
-    final title = ticket['title']?.toString() ?? 'Maintenance Request';
+    String title = ticket['title']?.toString().trim() ?? '';
+    if (title.startsWith('[')) {
+      final closeIdx = title.indexOf(']');
+      if (closeIdx > 1) {
+        final inside = title.substring(1, closeIdx);
+        title = inside.contains(' - ') ? inside.split(' - ').first.trim() : inside.trim();
+      }
+    }
+    if (title.isEmpty) {
+      final cat = ticket['category']?.toString() ?? 'General';
+      title = cat.isNotEmpty ? (cat[0].toUpperCase() + cat.substring(1)) : 'Maintenance Request';
+    }
     final category = ticket['category']?.toString() ?? 'General';
     final ticketId = '#SL-${(ticket['id'] ?? '00001').toString().padLeft(5, '0')}';
     final stageNum = (ticket['stage'] as num?)?.toInt() ?? 0;

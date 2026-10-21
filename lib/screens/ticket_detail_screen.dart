@@ -98,6 +98,44 @@ class TicketDetailScreen extends StatelessWidget {
                       ],
                     ),
                   ],
+                  if (ticket['photos'] is List && (ticket['photos'] as List).isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Divider(color: AppColors.borderLight),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Attached Photos',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink500),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 80,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: (ticket['photos'] as List).length,
+                        separatorBuilder: (context, i) => const SizedBox(width: 8),
+                        itemBuilder: (context, idx) {
+                          final path = (ticket['photos'] as List)[idx].toString();
+                          final url = path.startsWith('http') ? path : 'https://pwestora.com/$path';
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              url,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: 80,
+                                height: 80,
+                                color: AppColors.bg,
+                                child: const Icon(Icons.broken_image_rounded, color: AppColors.ink300),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

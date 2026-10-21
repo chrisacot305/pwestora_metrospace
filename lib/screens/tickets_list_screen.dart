@@ -34,7 +34,8 @@ const kPriorityColors = {
 };
 
 class TicketsListScreen extends StatefulWidget {
-  const TicketsListScreen({super.key});
+  final Map<String, dynamic>? lease;
+  const TicketsListScreen({super.key, this.lease});
 
   @override
   State<TicketsListScreen> createState() => _TicketsListScreenState();
@@ -44,21 +45,30 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   late Future<List<dynamic>> _future;
   String _filter = 'all';
 
+  int? get _tenantId {
+    final tid = widget.lease?['tenant_id'] ?? widget.lease?['id'];
+    return tid is int
+        ? tid
+        : (tid != null ? int.tryParse(tid.toString()) : null);
+  }
+
   @override
   void initState() {
     super.initState();
-    _future = ApiService.fetchTickets();
+    _future = ApiService.fetchTickets(tenantId: _tenantId);
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = ApiService.fetchTickets());
+    setState(() => _future = ApiService.fetchTickets(tenantId: _tenantId));
     await _future;
   }
 
   void _openCreate() async {
-    final created = await Navigator.of(
-      context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const TicketCreateScreen()));
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TicketCreateScreen(lease: widget.lease),
+      ),
+    );
     if (created == true) _refresh();
   }
 
@@ -88,14 +98,42 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreate,
-        backgroundColor: AppColors.primary,
-        elevation: 4,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'New Report',
-          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+      floatingActionButton: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF21447D), Color(0xFF142C56)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: const Color(0xFF1E6BFF).withValues(alpha: 0.45),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1E6BFF).withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+            BoxShadow(
+              color: const Color(0xFF0A1832).withValues(alpha: 0.20),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: _openCreate,
+            child: const Center(
+              child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            ),
+          ),
         ),
       ),
       body: RefreshIndicator(

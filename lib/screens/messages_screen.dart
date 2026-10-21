@@ -5,10 +5,16 @@ import '../theme.dart';
 import '../services/api_service.dart';
 
 class MessagesScreen extends StatefulWidget {
+  final Map<String, dynamic>? lease;
   final Function(int)? onNavigateTab;
   final ValueChanged<bool>? onTypingChanged;
 
-  const MessagesScreen({super.key, this.onNavigateTab, this.onTypingChanged});
+  const MessagesScreen({
+    super.key,
+    this.lease,
+    this.onNavigateTab,
+    this.onTypingChanged,
+  });
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -26,6 +32,32 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Timer? _pollingTimer;
   bool _hasText = false;
   final Set<int> _expandedMessageIndices = {};
+
+  int? get _currentTenantId {
+    if (widget.lease == null) return null;
+    final tid = widget.lease!['tenant_id'] ?? widget.lease!['id'];
+    if (tid is int) return tid;
+    if (tid is String) return int.tryParse(tid);
+    return null;
+  }
+
+  String get _accountSubtitle {
+    if (widget.lease == null) return 'Building Management • Active Lease';
+    final propName = (widget.lease!['property_name'] ?? widget.lease!['name'] ?? '').toString();
+    final bizName = (widget.lease!['business_name'] ?? '').toString();
+    final unit = (widget.lease!['unit_label'] ?? '').toString();
+
+    final parts = <String>[];
+    if (propName.isNotEmpty) parts.add(propName);
+    if (bizName.isNotEmpty) {
+      parts.add(bizName);
+    } else if (unit.isNotEmpty) {
+      parts.add('Unit $unit');
+    }
+
+    if (parts.isEmpty) return 'Building Management • Active Lease';
+    return parts.join(' • ');
+  }
 
   @override
   void initState() {
@@ -61,7 +93,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     if (!silent) setState(() => _loading = true);
 
     try {
-      final res = await ApiService.fetchMessagesThread();
+      final tid = _currentTenantId;
+      final res = await ApiService.fetchMessagesThread(tenantId: tid);
       final lessor = res['lessor_name'] as String?;
       final rawMsgs = (res['messages'] as List<dynamic>?) ?? [];
       final parsedMsgs = rawMsgs
@@ -70,7 +103,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
       // Fetch tickets to link live status to report bubbles
       try {
-        final t = await ApiService.fetchTickets();
+        final t = await ApiService.fetchTickets(tenantId: tid);
         _tickets = t;
       } catch (_) {}
 
@@ -116,7 +149,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     _msgCtrl.clear();
 
     try {
-      await ApiService.sendMessage(text);
+      await ApiService.sendMessage(text, tenantId: _currentTenantId);
       await _loadData(silent: true);
       _scrollToBottom(animated: true);
     } catch (e) {
@@ -129,6 +162,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       if (mounted) setState(() => _sending = false);
     }
   }
+
 
   Future<void> _pickPhoto() async {
     try {
@@ -268,19 +302,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   Text(
                     _lessorName,
                     style: const TextStyle(
-                      fontSize: 15.5,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF0B1B3D),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 1),
-                  const Text(
-                    'Building Management • Active Lease',
-                    style: TextStyle(
-                      fontSize: 11.5,
+                  Text(
+                    _accountSubtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: Color(0xFF64748B),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

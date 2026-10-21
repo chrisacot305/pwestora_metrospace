@@ -34,16 +34,30 @@ if ($referenceNo === '') {
     json_error('A transaction reference number or receipt details are required.');
 }
 
-$lesseeName = $lessee['full_name'] ?? ($lessee['name'] ?? '');
-$tenantStmt = $pdo->prepare(
-    'SELECT t.id AS tenant_id, t.lessor_id, a.rent
-     FROM tenants t
-     LEFT JOIN applications a ON a.id = t.application_id
-     WHERE t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?
-     ORDER BY t.created_at DESC LIMIT 1'
-);
-$tenantStmt->execute([$lessee['id'], $lesseeName, $lessee['id']]);
-$tenant = $tenantStmt->fetch();
+$reqTenantId = isset($body['tenant_id']) && (int)$body['tenant_id'] > 0 ? (int)$body['tenant_id'] : 0;
+$lesseeName  = $lessee['full_name'] ?? ($lessee['name'] ?? '');
+
+if ($reqTenantId > 0) {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, a.rent
+         FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.id = ? AND (t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?)
+         LIMIT 1'
+    );
+    $tenantStmt->execute([$reqTenantId, $lessee['id'], $lesseeName, $lessee['id']]);
+    $tenant = $tenantStmt->fetch();
+} else {
+    $tenantStmt = $pdo->prepare(
+        'SELECT t.id AS tenant_id, t.lessor_id, a.rent
+         FROM tenants t
+         LEFT JOIN applications a ON a.id = t.application_id
+         WHERE t.lessee_id = ? OR t.tenant_name = ? OR a.lessee_id = ?
+         ORDER BY t.created_at DESC LIMIT 1'
+    );
+    $tenantStmt->execute([$lessee['id'], $lesseeName, $lessee['id']]);
+    $tenant = $tenantStmt->fetch();
+}
 
 if (!$tenant) {
     // Ultimate fallback for test / demo accounts: pick the first tenant

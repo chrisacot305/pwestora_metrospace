@@ -6,6 +6,14 @@
  */
 $lessorId = $user['id'];
 $error = '';
+$listingSaved = false;
+
+$listingsRedirect = static function (string $extra = '') {
+    if (!headers_sent()) {
+        header('Location: /dashboard.php?page=listings' . $extra);
+        exit;
+    }
+};
 
 $PROPERTY_TYPES = ['Retail', 'Office', 'Warehouse', 'Food Stall', 'Medical/Clinic', 'Coworking Space', 'Commercial Lot', 'Other'];
 
@@ -114,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_property'], $_PO
 
             audit_log($pdo, $lessorId, 'Updated property details', $name);
             $pdo->commit();
-            header('Location: /dashboard.php?page=listings');
-            exit;
+            $listingsRedirect();
+            $listingSaved = true;
         } catch (Exception $e) {
             $pdo->rollBack();
             $error = ($e instanceof RuntimeException) ? $e->getMessage() : 'Something went wrong while updating. Please try again.';
@@ -132,8 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_photo'], $_POS
     if ($check->fetch()) {
         $pdo->prepare('DELETE FROM property_photos WHERE id = ?')->execute([$photoId]);
     }
-    header('Location: /dashboard.php?page=listings&edit=' . $propertyId);
-    exit;
+    $listingsRedirect('&edit=' . $propertyId);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_property']) && !isset($_POST['delete_photo'])) {
@@ -174,8 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_property']) && 
 
             audit_log($pdo, $lessorId, 'Submitted property for verification', $name);
             $pdo->commit();
-            header('Location: /dashboard.php?page=listings');
-            exit;
+            $listingsRedirect();
+            $listingSaved = true;
         } catch (Exception $e) {
             $pdo->rollBack();
             $error = ($e instanceof RuntimeException) ? $e->getMessage() : 'Something went wrong. Please try again.';
@@ -219,7 +226,7 @@ if ($editId) {
 
 <div class="card-grid-fixed" style="margin-bottom:28px;">
   <?php if (!$properties): ?>
-    <p style="color:var(--ink-500); font-size:13px;">You haven't submitted any properties yet — click "Add Property" to add your first one.</p>
+    <p style="color:var(--ink-500); font-size:13px;">You haven't submitted any properties yet so click "Add Property" to add your first one.</p>
   <?php else: foreach ($properties as $p):
       $statusBadge = match ($p['status']) {
           'verified' => ['Verified', 'background:var(--success-soft); color:var(--success);'],
@@ -284,7 +291,7 @@ if ($editId) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-<?php if ($editingProperty): ?>
+<?php if ($editingProperty && !$listingSaved): ?>
 <!-- CUSTOMIZE / EDIT PROPERTY DRAWER -->
 <div style="position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; justify-content:flex-end; z-index:1050; backdrop-filter:blur(2px);">
   <div style="background:#fff; width:540px; max-width:95vw; height:100%; padding:26px; overflow-y:auto; box-shadow:-4px 0 24px rgba(0,0,0,0.15);">
@@ -481,7 +488,7 @@ if ($editId) {
 </script>
 <?php endif; ?>
 
-<?php if (isset($_GET['add']) || ($error && !$editingProperty)): ?>
+<?php if (!$listingSaved && (isset($_GET['add']) || ($error && !$editingProperty))): ?>
 <div style="position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; justify-content:flex-end; z-index:1050; backdrop-filter:blur(2px);">
   <div style="background:#fff; width:480px; max-width:92vw; height:100%; padding:24px; overflow-y:auto; box-shadow:-4px 0 24px rgba(0,0,0,0.15);">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -489,8 +496,8 @@ if ($editId) {
       <a href="/dashboard.php?page=listings" style="font-size:20px; color:var(--ink-500); text-decoration:none;">&times;</a>
     </div>
     <p style="font-size:12.5px; color:var(--ink-500); margin-bottom:16px;">
-      Submitted for SuperAdmin review — it won't be visible to tenants until verified.
-      <strong>All fields and all 3 document uploads are required</strong> — if any is missing, nothing gets saved.
+      Submitted for SuperAdmin review, it won't be visible to tenants until verified.
+      <strong>All fields and all 3 document uploads are required.</strong> If any is missing, nothing gets saved.
     </p>
 
     <?php if ($error): ?>
@@ -520,7 +527,7 @@ if ($editId) {
         <label>Asking Monthly Rent (₱)</label>
         <input type="number" name="asking_rent" min="1" step="0.01" required
                value="<?= htmlspecialchars($_POST['asking_rent'] ?? '') ?>" placeholder="e.g. 35000">
-        <p style="font-size:11px; color:var(--ink-500); margin-top:4px;">Shown to tenants browsing — the actual lease rent is finalized when you approve an application.</p>
+        <p style="font-size:11px; color:var(--ink-500); margin-top:4px;">Shown to tenants browsing, but the actual lease rent will be finalized when you approve an application.</p>
       </div>
 
       <div class="field">
@@ -530,7 +537,7 @@ if ($editId) {
         <input type="hidden" name="latitude" id="latInput" value="<?= htmlspecialchars($_POST['latitude'] ?? '') ?>">
         <input type="hidden" name="longitude" id="lngInput" value="<?= htmlspecialchars($_POST['longitude'] ?? '') ?>">
         <p style="font-size:11px; color:var(--ink-500); margin-top:6px;">
-          Optional but recommended — search above, or click/drag the pin directly on the map.
+          Optional but recommended
         </p>
       </div>
 

@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Register as Lessor · <?= APP_NAME ?></title>
+<title>Lessor Registration · <?= APP_NAME ?></title>
 <link rel="stylesheet" href="/assets/css/style.css?v=12">
 <link rel="icon" type="image/png" href="/assets/img/icon.png">
 <meta name="theme-color" content="#102340">
@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="brand-mark"><div class="brand-badge"><img src="/assets/img/logo-web.png?v=2" alt="Pwestora" style="height:22px;"></div></div>
     <div class="tagline">
       <h1>List your commercial space with confidence.</h1>
-      <p>Every lessor and property is document-verified before going live —
+      <p>Every lessor and property is document-verified before going live,
          so tenants trust what they see, and you get serious applicants.</p>
       <div class="badges">
         <span>1–2 Business Day Review</span>
@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="card-brand"><img src="/assets/img/logo-web.png?v=2" alt="Pwestora"></div>
 
       <h2 class="auth-title">Create your lessor account</h2>
-      <p class="auth-sub">Register your business — our team verifies your documents before you can list properties.</p>
+      <p class="auth-sub">Register your business as our team verifies your documents before you can list properties.</p>
 
       <?php if ($error): ?>
         <div class="error-msg"><?= htmlspecialchars($error) ?></div>

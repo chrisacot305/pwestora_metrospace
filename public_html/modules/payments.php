@@ -41,6 +41,7 @@ function parse_payment_note(?string $note): array {
     if (preg_match('/Ref:\s*([^|]+)/i', $note, $m)) {
         $res['ref'] = trim($m[1]);
     }
+
     return $res;
 }
 
@@ -160,12 +161,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_payment'])) {
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([$tenantId, $lessorId, $amount, $method, $note ?: null, $paidAt, $lessorId]);
+
             $newPayId = (int) $pdo->lastInsertId();
 
             require_once __DIR__ . '/../includes/payment_sms_helper.php';
             send_payment_receipt_sms($pdo, $newPayId);
 
             audit_log($pdo, $lessorId, 'Logged rent payment', "₱$amount via {$METHODS[$method]} for {$tRow['tenant_name']}");
+
             header('Location: /dashboard.php?page=payments&msg=logged');
             exit;
         } catch (Throwable $e) {
@@ -175,6 +178,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_payment'])) {
     }
 }
 
+// Capture the search query for filtering
+$q = trim($_GET['q'] ?? '');
+$searchSql = '';
+$pendingParams = [$lessorId];
+$historyParams = [$lessorId];
+
+if ($q !== '') {
+    $searchSql = " AND (t.tenant_name LIKE ? OR p.name LIKE ? OR pay.note LIKE ?) ";
+    $wildcard = '%' . $q . '%';
+    array_push($pendingParams, $wildcard, $wildcard, $wildcard);
+    array_push($historyParams, $wildcard, $wildcard, $wildcard);
+}
+
 // PENDING INCOMING PAYMENTS (awaiting lessor review)
 $pendingQuery = $pdo->prepare(
     "SELECT pay.*, t.tenant_name, p.name AS property_name
@@ -182,9 +198,10 @@ $pendingQuery = $pdo->prepare(
      JOIN tenants t ON t.id = pay.tenant_id
      LEFT JOIN properties p ON p.id = t.property_id
      WHERE pay.lessor_id = ? AND (pay.logged_by IS NULL OR pay.note LIKE '[PENDING]%') AND (pay.note NOT LIKE '[DECLINED%')
+     $searchSql
      ORDER BY pay.id DESC"
 );
-$pendingQuery->execute([$lessorId]);
+$pendingQuery->execute($pendingParams);
 $pendingPayments = $pendingQuery->fetchAll();
 
 // HISTORICAL / RECORDED PAYMENTS
@@ -194,18 +211,25 @@ $historyQuery = $pdo->prepare(
      JOIN tenants t ON t.id = pay.tenant_id
      LEFT JOIN properties p ON p.id = t.property_id
      WHERE pay.lessor_id = ? AND (pay.logged_by IS NOT NULL OR pay.note LIKE '[DECLINED%')
+     $searchSql
      ORDER BY pay.paid_at DESC, pay.id DESC LIMIT 100"
 );
-$historyQuery->execute([$lessorId]);
+$historyQuery->execute($historyParams);
 $historyPayments = $historyQuery->fetchAll();
 
-// TENANTS FOR MANUAL LOGGING FORM
-$tenants = $pdo->prepare('SELECT id, tenant_name FROM tenants WHERE lessor_id = ? ORDER BY tenant_name');
+// PROPERTIES FOR MANUAL LOGGING FORM
+$properties = $pdo->prepare('SELECT id, name FROM properties WHERE lessor_id = ? ORDER BY name');
+$properties->execute([$lessorId]);
+$properties = $properties->fetchAll();
+
+// TENANTS FOR MANUAL LOGGING FORM (Included property_id)
+$tenants = $pdo->prepare('SELECT id, tenant_name, property_id FROM tenants WHERE lessor_id = ? ORDER BY tenant_name');
 $tenants->execute([$lessorId]);
 $tenants = $tenants->fetchAll();
 
 // STATS
 $pendingTotal = array_sum(array_column($pendingPayments, 'amount'));
+
 $monthTotalStmt = $pdo->prepare(
     "SELECT COALESCE(SUM(amount), 0) FROM payments
      WHERE lessor_id = ? AND logged_by IS NOT NULL
@@ -263,6 +287,20 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
   </div>
 </div>
 
+<!-- REAL-TIME FILTER BAR -->
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:20px;">
+  <div style="flex:1; min-width:220px; position:relative;">
+    <i class="bi bi-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-400); font-size:13px;"></i>
+    <input id="pay-search" type="search" placeholder="Search property, tenant, target, or reference..." autocomplete="off" style="width:100%; box-sizing:border-box; padding:8px 12px 8px 34px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:#fff; color:var(--ink-900);">
+  </div>
+  <select id="pay-status-filter" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:#fff; color:var(--ink-900); min-width:140px;">
+    <option value="">All statuses</option>
+    <option value="pending">Pending Review</option>
+    <option value="verified">Verified</option>
+    <option value="declined">Declined</option>
+  </select>
+</div>
+
 <!-- =============================================================
      SECTION 1: INCOMING TENANT PAYMENTS (AWAITING VERIFICATION)
      ============================================================= -->
@@ -288,6 +326,7 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
     <table>
       <thead>
         <tr>
+          <th>Property</th>
           <th>Tenant</th>
           <th>Amount</th>
           <th>Payment Target</th>
@@ -296,23 +335,27 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
           <th style="text-align:right;">Verification Action</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="pending-table-body">
         <?php if (!$pendingPayments): ?>
           <tr>
-            <td colspan="6" style="text-align:center; padding:32px 16px; color:var(--ink-500);">
+            <td colspan="7" style="text-align:center; padding:32px 16px; color:var(--ink-500);">
               <i class="bi bi-check2-circle" style="font-size:24px; color:var(--success); display:block; margin-bottom:6px;"></i>
               No pending payment submissions. All transfers have been verified.
             </td>
           </tr>
         <?php else: foreach ($pendingPayments as $p):
           $parsed = parse_payment_note($p['note']);
+          $searchBlob = strtolower(trim(implode(' ', array_filter([
+              $p['property_name'] ?? '',
+              $p['tenant_name'],
+              $parsed['target'],
+              $parsed['ref']
+          ]))));
         ?>
-          <tr>
+          <tr class="pay-row" data-status="pending" data-search="<?= htmlspecialchars($searchBlob) ?>">
+            <td style="color:var(--ink-500);"><?= htmlspecialchars($p['property_name'] ?? 'Unknown Property') ?></td>
             <td>
               <div style="font-weight:700; color:var(--ink-900);"><?= htmlspecialchars($p['tenant_name']) ?></div>
-              <?php if (!empty($p['property_name'])): ?>
-                <div style="font-size:11.5px; color:var(--ink-500);"><?= htmlspecialchars($p['property_name']) ?></div>
-              <?php endif; ?>
             </td>
             <td>
               <span style="font-size:15px; font-weight:800; color:var(--primary);">
@@ -343,7 +386,6 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
                     <i class="bi bi-check-circle-fill"></i> Confirm Received
                   </button>
                 </form>
-
                 <!-- Decline Button -->
                 <form method="POST" style="margin:0;" onsubmit="return confirm('Are you sure you want to decline this transfer?');">
                   <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
@@ -357,6 +399,9 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
             </td>
           </tr>
         <?php endforeach; endif; ?>
+          <tr id="pending-empty-filter" style="display:none;">
+            <td colspan="7" style="text-align:center; padding:32px 16px; color:var(--ink-500);">No pending payments match your search.</td>
+          </tr>
       </tbody>
     </table>
   </div>
@@ -366,6 +411,7 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
      SECTION 2: VERIFIED PAYMENTS LEDGER & MANUAL LOGGING
      ============================================================= -->
 <div style="display:grid; grid-template-columns: 2fr 1fr; gap:24px; align-items:start;">
+
   <!-- Verified Ledger -->
   <div class="card" style="padding:0; overflow:hidden;">
     <div style="padding:14px 18px; background:var(--surface); border-bottom:1px solid var(--border);">
@@ -374,11 +420,11 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
         Credited payments visible to tenants in their mobile app ledger.
       </p>
     </div>
-
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
+            <th>Property</th>
             <th>Tenant</th>
             <th>Amount</th>
             <th>Method</th>
@@ -387,18 +433,27 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
             <th>Status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="history-table-body">
           <?php if (!$historyPayments): ?>
             <tr>
-              <td colspan="6" style="text-align:center; padding:24px; color:var(--ink-500);">
+              <td colspan="7" style="text-align:center; padding:24px; color:var(--ink-500);">
                 No verified payments in the ledger yet.
               </td>
             </tr>
           <?php else: foreach ($historyPayments as $p):
             $parsed = parse_payment_note($p['note']);
             $isDeclined = $parsed['status'] === 'declined';
+            $statusVal = $isDeclined ? 'declined' : ($p['logged_by'] !== null ? 'verified' : 'pending');
+            $searchBlob = strtolower(trim(implode(' ', array_filter([
+                $p['property_name'] ?? '',
+                $p['tenant_name'],
+                $parsed['target'],
+                $parsed['ref'],
+                $p['note']
+            ]))));
           ?>
-            <tr>
+            <tr class="pay-row" data-status="<?= $statusVal ?>" data-search="<?= htmlspecialchars($searchBlob) ?>">
+              <td style="color:var(--ink-500);"><?= htmlspecialchars($p['property_name'] ?? 'Unknown Property') ?></td>
               <td style="font-weight:600;"><?= htmlspecialchars($p['tenant_name']) ?></td>
               <td style="font-weight:700; color:<?= $isDeclined ? 'var(--ink-500)' : 'var(--ink-900)' ?>;">
                 ₱<?= number_format($p['amount'], 2) ?>
@@ -411,6 +466,7 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
                   <?php if ($parsed['target'] !== 'Monthly Rent'): ?>
                     <span style="font-weight:600; color:var(--primary);"><?= htmlspecialchars($parsed['target']) ?></span>
                   <?php endif; ?>
+                  
                   <?php if ($parsed['ref'] !== '—'): ?>
                     <span style="color:var(--ink-500); font-family:monospace; margin-left:4px;">Ref: <?= htmlspecialchars($parsed['ref']) ?></span>
                   <?php elseif (!empty($p['note']) && !$isDeclined): ?>
@@ -436,6 +492,9 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
               </td>
             </tr>
           <?php endforeach; endif; ?>
+            <tr id="history-empty-filter" style="display:none;">
+              <td colspan="7" style="text-align:center; padding:24px; color:var(--ink-500);">No verified payments match your search.</td>
+            </tr>
         </tbody>
       </table>
     </div>
@@ -454,19 +513,33 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
       <form method="POST">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="log_payment" value="1">
+        
         <div class="field">
-          <label>Tenant</label>
-          <select name="tenant_id" required>
-            <option value="">Select tenant…</option>
-            <?php foreach ($tenants as $t): ?>
-              <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['tenant_name']) ?></option>
+          <label>Property</label>
+          <select id="payment_property_select" name="property_id" required>
+            <option value="">Select property…</option>
+            <?php foreach ($properties as $p): ?>
+              <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
+
+        <div class="field">
+          <label>Tenant</label>
+          <select id="payment_tenant_select" name="tenant_id" required disabled>
+            <option value="">Select a property first…</option>
+            <!-- These options are hidden and managed by JS based on property_id -->
+            <?php foreach ($tenants as $t): ?>
+              <option value="<?= $t['id'] ?>" data-property="<?= $t['property_id'] ?>"><?= htmlspecialchars($t['tenant_name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        
         <div class="field">
           <label>Amount (₱)</label>
           <input type="number" name="amount" min="1" step="0.01" placeholder="e.g. 2500" required>
         </div>
+        
         <div class="field">
           <label>Payment Method</label>
           <select name="method" required>
@@ -475,18 +548,113 @@ $monthTotal = (float) $monthTotalStmt->fetchColumn();
             <?php endforeach; ?>
           </select>
         </div>
+        
         <div class="field">
           <label>Date Received</label>
           <input type="date" name="paid_at" value="<?= date('Y-m-d') ?>" required>
         </div>
+        
         <div class="field">
           <label>Note / Remarks (optional)</label>
           <input type="text" name="note" placeholder="e.g. Official Receipt #10492">
         </div>
-        <button class="btn btn-primary" type="submit" style="margin-top:6px;">
+        
+        <button class="btn btn-primary" type="submit" style="margin-top:6px; width:100%;">
           <i class="bi bi-save2"></i> Log Payment
         </button>
       </form>
+
+      <!-- Javascript for Property -> Tenant Cascading Dropdown -->
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+           var propSel = document.getElementById('payment_property_select');
+           var tenSel = document.getElementById('payment_tenant_select');
+           
+           if (propSel && tenSel) {
+               // Clone all original tenant options to keep as a master list
+               var allOptions = Array.from(tenSel.querySelectorAll('option[data-property]'));
+               
+               propSel.addEventListener('change', function() {
+                   var pid = this.value;
+                   
+                   // Reset tenant dropdown
+                   tenSel.innerHTML = '<option value="">Select tenant...</option>';
+                   var hasTenants = false;
+                   
+                   // Append only tenants belonging to the selected property
+                   allOptions.forEach(function(opt) {
+                       if(opt.getAttribute('data-property') === pid) {
+                           tenSel.appendChild(opt.cloneNode(true));
+                           hasTenants = true;
+                       }
+                   });
+                   
+                   // Handle disabled states and messaging
+                   if (!pid) {
+                      tenSel.innerHTML = '<option value="">Select a property first...</option>';
+                      tenSel.disabled = true;
+                   } else if (!hasTenants) {
+                      tenSel.innerHTML = '<option value="">No tenants found here</option>';
+                      tenSel.disabled = true;
+                   } else {
+                      tenSel.disabled = false;
+                   }
+               });
+               
+               // Initialize pure state
+               tenSel.innerHTML = '<option value="">Select a property first...</option>';
+               tenSel.disabled = true;
+           }
+        });
+      </script>
     <?php endif; ?>
   </div>
+
 </div>
+
+<!-- Real-Time Javascript Filtering Script -->
+<script>
+(function () {
+  var search = document.getElementById('pay-search');
+  var status = document.getElementById('pay-status-filter');
+  var pendingRows = Array.prototype.slice.call(document.querySelectorAll('#pending-table-body .pay-row'));
+  var historyRows = Array.prototype.slice.call(document.querySelectorAll('#history-table-body .pay-row'));
+  var emptyPending = document.getElementById('pending-empty-filter');
+  var emptyHistory = document.getElementById('history-empty-filter');
+
+  function applyFilter() {
+    var q = (search.value || '').trim().toLowerCase();
+    var st = status.value || '';
+
+    var shownPending = 0;
+    pendingRows.forEach(function (row) {
+      var matchQ = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      var matchS = !st || row.getAttribute('data-status') === st;
+      var visible = matchQ && matchS;
+      row.style.display = visible ? '' : 'none';
+      if (visible) shownPending++;
+    });
+    if (emptyPending && pendingRows.length > 0) {
+        emptyPending.style.display = shownPending ? 'none' : '';
+    }
+
+    var shownHistory = 0;
+    historyRows.forEach(function (row) {
+      var matchQ = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      var matchS = !st || row.getAttribute('data-status') === st;
+      var visible = matchQ && matchS;
+      row.style.display = visible ? '' : 'none';
+      if (visible) shownHistory++;
+    });
+    if (emptyHistory && historyRows.length > 0) {
+        emptyHistory.style.display = shownHistory ? 'none' : '';
+    }
+  }
+
+  if (search && status) {
+    search.addEventListener('input', applyFilter);
+    status.addEventListener('change', applyFilter);
+    applyFilter(); // Run immediately on load
+  }
+})();
+</script>

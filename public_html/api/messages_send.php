@@ -19,8 +19,15 @@ if ($text === '') {
     json_error('Message cannot be empty.');
 }
 
-$tenantStmt = $pdo->prepare('SELECT id AS tenant_id, lessor_id FROM tenants WHERE lessee_id = ? ORDER BY created_at DESC LIMIT 1');
-$tenantStmt->execute([$lessee['id']]);
+$tenantId = isset($body['tenant_id']) && (int)$body['tenant_id'] > 0 ? (int)$body['tenant_id'] : 0;
+
+if ($tenantId > 0) {
+    $tenantStmt = $pdo->prepare('SELECT id AS tenant_id, lessor_id FROM tenants WHERE lessee_id = ? AND id = ? LIMIT 1');
+    $tenantStmt->execute([$lessee['id'], $tenantId]);
+} else {
+    $tenantStmt = $pdo->prepare('SELECT id AS tenant_id, lessor_id FROM tenants WHERE lessee_id = ? ORDER BY created_at DESC LIMIT 1');
+    $tenantStmt->execute([$lessee['id']]);
+}
 $tenant = $tenantStmt->fetch();
 
 if (!$tenant) {

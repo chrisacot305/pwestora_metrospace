@@ -137,11 +137,16 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
         ? '[$_selectedCategoryLabel] $_selectedSymptom'
         : '[$_selectedCategoryLabel - $_selectedSymptom] ${_descriptionCtrl.text.trim()}';
 
+    final tid = widget.lease?['tenant_id'] ?? widget.lease?['id'];
+    final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+
     try {
       final ticketId = await ApiService.createTicket(
         category: _selectedCategoryKey ?? 'plumbing',
         priority: _priority,
         title: title,
+        tenantId: tenantId,
+        photos: _attachedPhotos,
       );
 
       // Auto-post report details to the chat thread with lessor
@@ -155,6 +160,7 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
           'Description: $descText'
           '$photoNote\n'
           'Status: Pending Review',
+          tenantId: tenantId,
         );
       } catch (_) {
         // Chat notification is complementary; proceed even if message post fails
@@ -439,7 +445,9 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
                     InkWell(
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const MessagesScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => MessagesScreen(lease: widget.lease),
+                          ),
                         );
                       },
                       child: Row(
@@ -792,9 +800,9 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
 
   // ================= STEP 3: REVIEW REPORT =================
   Widget _buildReviewStep() {
-    final unit = widget.lease?['unit_label'] ?? 'Unit 302 • 3rd Floor';
+    final propertyName = (widget.lease?['property_name'] ?? '').toString().trim();
     final desc = _descriptionCtrl.text.trim().isEmpty
-        ? 'Water is leaking from the toilet bowl and the floor is wet.'
+        ? 'No additional description provided.'
         : _descriptionCtrl.text.trim();
 
     return Column(
@@ -868,22 +876,23 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Unit badge row
-              Row(
-                children: [
-                  const Icon(Icons.location_on_outlined, size: 16, color: AppColors.electricBlue),
-                  const SizedBox(width: 6),
-                  Text(
-                    unit,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink700,
+              if (propertyName.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 16, color: AppColors.electricBlue),
+                    const SizedBox(width: 6),
+                    Text(
+                      propertyName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink700,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Attached Photo Thumbnail / Previews
               if (_attachedPhotos.isNotEmpty) ...[

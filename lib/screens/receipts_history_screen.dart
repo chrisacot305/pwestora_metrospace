@@ -33,7 +33,9 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
   Future<void> _loadTransactions() async {
     setState(() => _loading = true);
     try {
-      final list = await ApiService.fetchPayments();
+      final tid = widget.lease['tenant_id'] ?? widget.lease['id'];
+      final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
+      final list = await ApiService.fetchPayments(tenantId: tenantId);
       final parsed = <Map<String, dynamic>>[];
 
       for (final item in list) {
@@ -43,17 +45,11 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
         }
       }
 
-      // If empty or initial, include realistic transactions so the user can test immediately
-      if (parsed.isEmpty) {
-        parsed.addAll(_getSampleTransactions());
-      } else {
-        // Sort by paid_at descending
-        parsed.sort(
-          (a, b) => (b['paid_at_raw'] ?? '').toString().compareTo(
-            (a['paid_at_raw'] ?? '').toString(),
-          ),
-        );
-      }
+      parsed.sort(
+        (a, b) => (b['paid_at_raw'] ?? '').toString().compareTo(
+          (a['paid_at_raw'] ?? '').toString(),
+        ),
+      );
 
       if (mounted) {
         setState(() {
@@ -64,7 +60,7 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _transactions = _getSampleTransactions();
+          _transactions = [];
           _loading = false;
         });
       }
@@ -76,7 +72,13 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     final note = (raw['note'] ?? '').toString();
     final target = (raw['target'] ?? '').toString();
     final rawDate = (raw['paid_at'] ?? '').toString();
-    final ref = (raw['reference_no'] ?? raw['ref_no'] ?? '').toString();
+    var ref = (raw['reference_no'] ?? raw['ref_no'] ?? '').toString().trim();
+    if (ref.isEmpty && note.contains('Ref:')) {
+      final match = RegExp(r'Ref:\s*([^|\r\n]+)').firstMatch(note);
+      if (match != null) {
+        ref = match.group(1)?.trim() ?? '';
+      }
+    }
 
     final isOverdue =
         target.contains('overdue') ||
@@ -95,7 +97,7 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     final formattedTime = _formatTime(dt);
     final refNo = ref.isNotEmpty
         ? ref
-        : '9021 ${(dt.millisecondsSinceEpoch % 100000000).toString().padLeft(8, '0')}';
+        : 'REF-${raw['id'] ?? (dt.millisecondsSinceEpoch % 100000000)}';
 
     return {
       'id': raw['id'],
@@ -112,69 +114,6 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
       'paid_at_raw': rawDate.isNotEmpty ? rawDate : dt.toIso8601String(),
       'status': (raw['status'] ?? 'approved').toString().toLowerCase(),
     };
-  }
-
-  List<Map<String, dynamic>> _getSampleTransactions() {
-    final now = DateTime.now();
-    final d1 = now.subtract(const Duration(days: 3));
-    final d2 = now.subtract(const Duration(days: 12));
-    final d3 = now.subtract(const Duration(days: 25));
-    final d4 = now.subtract(const Duration(days: 60));
-
-    return [
-      {
-        'id': 101,
-        'amount': widget.rentAmount > 0 ? widget.rentAmount + 500 : 12500.0,
-        'is_overdue': true,
-        'title': 'Past Due Payment',
-        'type_label': 'Past Due Payment (Beyond Due Date)',
-        'date_header': _formatDateHeader(d1),
-        'time_str': '09:45 PM',
-        'full_datetime': '${_formatDateHeader(d1)} · 09:45 PM',
-        'ref_no': '9021 8492 0184',
-        'paid_at_raw': d1.toIso8601String(),
-        'status': 'pending',
-      },
-      {
-        'id': 102,
-        'amount': widget.rentAmount > 0 ? widget.rentAmount : 12000.0,
-        'is_overdue': false,
-        'title': 'Successful payment...',
-        'type_label': 'Successful payment...',
-        'date_header': _formatDateHeader(d2),
-        'time_str': '02:15 PM',
-        'full_datetime': '${_formatDateHeader(d2)} · 02:15 PM',
-        'ref_no': '9019 4431 8820',
-        'paid_at_raw': d2.toIso8601String(),
-        'status': 'approved',
-      },
-      {
-        'id': 103,
-        'amount': widget.rentAmount > 0 ? widget.rentAmount : 12000.0,
-        'is_overdue': false,
-        'title': 'Successful payment...',
-        'type_label': 'Successful payment...',
-        'date_header': _formatDateHeader(d3),
-        'time_str': '11:30 AM',
-        'full_datetime': '${_formatDateHeader(d3)} · 11:30 AM',
-        'ref_no': '9014 2091 7654',
-        'paid_at_raw': d3.toIso8601String(),
-        'status': 'approved',
-      },
-      {
-        'id': 104,
-        'amount': widget.rentAmount > 0 ? widget.rentAmount : 12000.0,
-        'is_overdue': false,
-        'title': 'Successful payment...',
-        'type_label': 'Successful payment...',
-        'date_header': _formatDateHeader(d4),
-        'time_str': '04:10 PM',
-        'full_datetime': '${_formatDateHeader(d4)} · 04:10 PM',
-        'ref_no': '9008 1142 5521',
-        'paid_at_raw': d4.toIso8601String(),
-        'status': 'approved',
-      },
-    ];
   }
 
   String _formatDateHeader(DateTime dt) {
@@ -1428,14 +1367,30 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text(
-          'Transactions',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: AppColors.midnightNavy,
-            letterSpacing: -0.3,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Transactions',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: AppColors.midnightNavy,
+                letterSpacing: -0.3,
+              ),
+            ),
+            if ((widget.lease['property_name'] ?? widget.lease['business_name'] ?? '').toString().isNotEmpty)
+              Text(
+                (widget.lease['property_name'] ?? widget.lease['business_name']).toString(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
         ),
         centerTitle: true,
         backgroundColor: Colors.white,

@@ -75,9 +75,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['log_request'])) {
     }
 }
 
+// Updated query to join the properties table to get the property name
 $requests = $pdo->prepare(
-    'SELECT ir.*, t.tenant_name FROM installment_requests ir
+    'SELECT ir.*, t.tenant_name, p.name AS property_name 
+     FROM installment_requests ir
      JOIN tenants t ON t.id = ir.tenant_id
+     JOIN properties p ON p.id = t.property_id
      WHERE ir.lessor_id = ? ORDER BY ir.created_at DESC'
 );
 $requests->execute([$lessorId]);
@@ -94,23 +97,65 @@ if ($reviewId) {
         if ((int) $r['id'] === $reviewId) { $reviewing = $r; break; }
     }
 }
+$loggingReq = isset($_GET['log']);
 ?>
-<h2 style="margin:0 0 4px;">Installment Requests</h2>
-<p style="color:var(--ink-500); margin:0 0 20px;">Structured restructuring only — no informal rent-reduction negotiation.</p>
 
-<?php if ($error): ?>
+<div style="margin-bottom:20px;">
+  <h2 style="margin:0 0 4px;">Installment Requests</h2>
+  <p style="color:var(--ink-500); margin:0;">Structured restructuring only, no informal rent-reduction negotiation.</p>
+</div>
+
+<?php if ($error && !$loggingReq && !$reviewing): ?>
   <div class="error-msg"><?= htmlspecialchars($error) ?></div>
 <?php endif; ?>
 
 <div class="card" style="padding:0; overflow:hidden; margin-bottom:28px;">
+  
+  <!-- FILTER BAR & LOG BUTTON -->
+  <div style="display:flex; gap:10px; flex-wrap:nowrap; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); overflow-x:auto;">
+    
+    <div style="flex:1; min-width:220px; position:relative;">
+      <i class="bi bi-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-400); font-size:13px;"></i>
+      <input id="req-search" type="search" placeholder="Search property, tenant, reason, or plan..."
+             autocomplete="off"
+             style="width:100%; box-sizing:border-box; padding:8px 12px 8px 34px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:var(--bg); color:var(--ink-900);">
+    </div>
+
+    <!-- LOG REQUEST BUTTON -->
+    <a href="/dashboard.php?page=installments&log=1" class="btn btn-primary" style="width:auto; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; font-size:12px; flex-shrink:0;">
+      <i class="bi bi-plus-lg"></i> Log Request
+    </a>
+
+    <select id="req-status-filter"
+            style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13px; background:#fff; color:var(--ink-900); min-width:140px; flex-shrink:0;">
+      <option value="">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <span id="req-filter-count" style="font-size:12.5px; color:var(--ink-500); white-space:nowrap; flex-shrink:0;"></span>
+    
+  </div>
+  <!-- END FILTER BAR -->
+
   <div class="table-scroll">
   <table>
-    <thead><tr><th>Tenant</th><th>Reason</th><th>Plan</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Property</th><th>Tenant</th><th>Reason</th><th>Plan</th><th>Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>
       <?php if (!$requests): ?>
-        <tr><td colspan="6" style="text-align:center; color:var(--ink-500);">No installment requests yet.</td></tr>
-      <?php else: foreach ($requests as $r): ?>
-        <tr>
+        <tr><td colspan="7" style="text-align:center; color:var(--ink-500);">No installment requests yet.</td></tr>
+      <?php else: foreach ($requests as $r): 
+          // Generate hidden search text for this row
+          $searchBlob = strtolower(trim(implode(' ', array_filter([
+              $r['property_name'] ?? '',
+              $r['tenant_name'],
+              $r['reason'],
+              $r['plan_label'],
+              $r['status']
+          ]))));
+      ?>
+        <tr class="req-row" data-status="<?= htmlspecialchars($r['status']) ?>" data-search="<?= htmlspecialchars($searchBlob) ?>">
+          <td style="color:var(--ink-500);"><?= htmlspecialchars($r['property_name'] ?? 'Unknown Property') ?></td>
           <td style="font-weight:600;"><?= htmlspecialchars($r['tenant_name']) ?></td>
           <td style="color:var(--ink-500);"><?= htmlspecialchars($r['reason']) ?></td>
           <td style="color:var(--ink-500);"><?= htmlspecialchars($r['plan_label']) ?></td>
@@ -132,52 +177,107 @@ if ($reviewId) {
           </td>
         </tr>
       <?php endforeach; endif; ?>
+        
+        <tr id="req-empty-filter" style="display:none;">
+          <td colspan="7" style="text-align:center; color:var(--ink-500);">No requests match your search or filter.</td>
+        </tr>
     </tbody>
   </table>
   </div>
 </div>
 
-<div class="card" style="max-width:480px;">
-  <p style="font-weight:700; font-size:14px; margin-bottom:4px;">Log a request</p>
-  <p style="font-size:12.5px; color:var(--ink-500); margin-bottom:16px;">
-    Received an installment request offline? Log it here so it goes through the same review flow.
-  </p>
+<script>
+(function () {
+  var search = document.getElementById('req-search');
+  var status = document.getElementById('req-status-filter');
+  var count = document.getElementById('req-filter-count');
+  var empty = document.getElementById('req-empty-filter');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.req-row'));
+  var total = rows.length;
 
-  <?php if (!$tenants): ?>
-    <p style="font-size:13px; color:var(--ink-500);">You don't have any active tenants yet — approve an application first.</p>
-  <?php else: ?>
-    <form method="POST">
-      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-      <input type="hidden" name="log_request" value="1">
-      <div class="field">
-        <label>Tenant</label>
-        <select name="tenant_id" required>
-          <option value="">Select tenant…</option>
-          <?php foreach ($tenants as $t): ?>
-            <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['tenant_name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div class="field">
-        <label>Reason</label>
-        <input type="text" name="reason" placeholder="e.g. Seasonal slowdown in business" required>
-      </div>
-      <div class="field">
-        <label>Plan</label>
-        <select name="plan_label" required>
-          <option value="2 payments">2 payments</option>
-          <option value="3 payments">3 payments</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Total Amount (₱)</label>
-        <input type="number" name="amount" min="1" step="0.01" required>
-      </div>
-      <button class="btn btn-primary" type="submit">Log Request</button>
-    </form>
-  <?php endif; ?>
+  function applyFilter() {
+    var q = (search.value || '').trim().toLowerCase();
+    var st = status.value || '';
+    var shown = 0;
+
+    rows.forEach(function (row) {
+      var matchQ = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      var matchS = !st || row.getAttribute('data-status') === st;
+      var visible = matchQ && matchS;
+
+      row.style.display = visible ? '' : 'none';
+      if (visible) shown++;
+    });
+
+    if (empty && total > 0) empty.style.display = shown ? 'none' : '';
+    if (count) {
+      count.textContent = (q || st) ? (shown + ' of ' + total) : (total + ' request' + (total === 1 ? '' : 's'));
+    }
+  }
+
+  if (search && status) {
+    search.addEventListener('input', applyFilter);
+    status.addEventListener('change', applyFilter);
+    applyFilter(); // Run on load
+  }
+})();
+</script>
+
+<!-- LOG REQUEST POPUP DRAWER -->
+<?php if ($loggingReq || ($error && !$reviewing)): ?>
+<div style="position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; justify-content:flex-end; z-index:50;">
+  <div style="background:#fff; width:440px; max-width:92vw; height:100%; padding:24px; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0;">Log a request</h3>
+      <a href="/dashboard.php?page=installments" style="font-size:20px; color:var(--ink-500); text-decoration:none;">&times;</a>
+    </div>
+    
+    <p style="font-size:12.5px; color:var(--ink-500); margin-bottom:16px;">
+      Received an installment request offline? Log it here so it goes through the same review flow.
+    </p>
+
+    <?php if ($error): ?>
+      <div class="error-msg" style="margin-bottom:16px;"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+
+    <?php if (!$tenants): ?>
+      <p style="font-size:13px; color:var(--ink-500);">You don't have any active tenants yet — approve an application first.</p>
+    <?php else: ?>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+        <input type="hidden" name="log_request" value="1">
+        <div class="field">
+          <label>Tenant</label>
+          <select name="tenant_id" required>
+            <option value="">Select tenant…</option>
+            <?php foreach ($tenants as $t): ?>
+              <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['tenant_name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="field">
+          <label>Reason</label>
+          <input type="text" name="reason" placeholder="e.g. Seasonal slowdown in business" required>
+        </div>
+        <div class="field">
+          <label>Plan</label>
+          <select name="plan_label" required>
+            <option value="2 payments">2 payments</option>
+            <option value="3 payments">3 payments</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Total Amount (₱)</label>
+          <input type="number" name="amount" min="1" step="0.01" required>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">Log Request</button>
+      </form>
+    <?php endif; ?>
+  </div>
 </div>
+<?php endif; ?>
 
+<!-- REVIEW POPUP DRAWER -->
 <?php if ($reviewing):
     $splitCount = $reviewing['plan_label'] === '3 payments' ? 3 : 2;
     $perPayment = round($reviewing['amount'] / $splitCount);
@@ -186,7 +286,7 @@ if ($reviewId) {
   <div style="background:#fff; width:420px; max-width:92vw; height:100%; padding:24px; overflow-y:auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <h3 style="margin:0;">IR-<?= str_pad($reviewing['id'], 3, '0', STR_PAD_LEFT) ?></h3>
-      <a href="/dashboard.php?page=installments" style="font-size:20px; color:var(--ink-500);">&times;</a>
+      <a href="/dashboard.php?page=installments" style="font-size:20px; color:var(--ink-500); text-decoration:none;">&times;</a>
     </div>
 
     <div class="card" style="margin-bottom:16px;">

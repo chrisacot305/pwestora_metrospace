@@ -302,18 +302,29 @@ class _HomeShellState extends State<HomeShell> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppColors.electricBlue,
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF21447D),
+                                Color(0xFF142C56),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF1E6BFF).withValues(alpha: 0.45),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0A1832).withValues(alpha: 0.18),
+                                color: const Color(0xFF1E6BFF).withValues(alpha: 0.25),
                                 blurRadius: 10,
-                                offset: const Offset(0, 4),
+                                offset: const Offset(0, 3),
                               ),
                               BoxShadow(
-                                color: AppColors.electricBlue.withValues(alpha: 0.35),
+                                color: const Color(0xFF0A1832).withValues(alpha: 0.20),
                                 blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
