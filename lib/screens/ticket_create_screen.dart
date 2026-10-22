@@ -26,7 +26,7 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
   String _priority = 'medium'; // low, medium, high, urgent
   bool _loading = false;
   String? _error;
-  int? _createdTicketId;
+  bool _validateDetails = false;
   final List<XFile> _attachedPhotos = [];
   final ImagePicker _picker = ImagePicker();
 
@@ -128,14 +128,21 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
   }
 
   Future<void> _submitReport() async {
+    if (_descriptionCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Please provide details describing the problem.');
+      return;
+    }
+    if (_attachedPhotos.isEmpty) {
+      setState(() => _error = 'Please attach at least 1 photo of the issue.');
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    final title = _descriptionCtrl.text.trim().isEmpty
-        ? '[$_selectedCategoryLabel] $_selectedSymptom'
-        : '[$_selectedCategoryLabel - $_selectedSymptom] ${_descriptionCtrl.text.trim()}';
+    final title = '[$_selectedCategoryLabel - $_selectedSymptom] ${_descriptionCtrl.text.trim()}';
 
     final tid = widget.lease?['tenant_id'] ?? widget.lease?['id'];
     final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
@@ -152,8 +159,8 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
       // Auto-post report details to the chat thread with lessor
       try {
         final ticketFormatted = '#SL-${ticketId.toString().padLeft(5, '0')}';
-        final descText = _descriptionCtrl.text.trim().isEmpty ? _selectedSymptom : _descriptionCtrl.text.trim();
-        final photoNote = _attachedPhotos.isNotEmpty ? '\nAttachments: ${_attachedPhotos.length} photo(s) attached' : '';
+        final descText = _descriptionCtrl.text.trim();
+        final photoNote = '\nAttachments: ${_attachedPhotos.length} photo(s) attached';
         await ApiService.sendMessage(
           '🛠️ Maintenance Report ($ticketFormatted)\n'
           'Category: $_selectedCategoryLabel • $_selectedSymptom\n'
@@ -167,10 +174,7 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
       }
 
       if (!mounted) return;
-      setState(() {
-        _createdTicketId = ticketId;
-        _currentStep = 4; // Glow Success Screen
-      });
+      _showSuccessDialog(ticketId);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -178,11 +182,83 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
     }
   }
 
+  void _showSuccessDialog(int ticketId) {
+    final ticketFormatted = '#SL-${ticketId.toString().padLeft(5, '0')}';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFBFDBFE), width: 1.5),
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.electricBlue,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Report Submitted!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppColors.midnightNavy,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your maintenance report $ticketFormatted has been recorded as Pending. The lessor will review the request and keep you updated.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.ink500,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).pop(true);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Back to Reports',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_currentStep == 4) {
-      return _buildSuccessScreen();
-    }
 
     if (_currentStep == 1) {
       return Scaffold(
@@ -589,20 +665,48 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
         const SizedBox(height: 20),
 
         // Description Box
-        const Text(
-          'Description',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.ink900,
-          ),
+        Row(
+          children: const [
+            Text(
+              'Description',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink900,
+              ),
+            ),
+            SizedBox(width: 4),
+            Text(
+              '*',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppColors.error,
+              ),
+            ),
+            SizedBox(width: 6),
+            Text(
+              '(Required)',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink500,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _descriptionCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Describe the problem...',
+          onChanged: (_) {
+            if (_validateDetails) setState(() {});
+          },
+          decoration: InputDecoration(
+            hintText: 'Describe the problem in detail...',
+            errorText: _validateDetails && _descriptionCtrl.text.trim().isEmpty
+                ? 'Details are required'
+                : null,
           ),
         ),
 
@@ -612,13 +716,35 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Attach Photo',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: AppColors.ink900,
-              ),
+            Row(
+              children: const [
+                Text(
+                  'Attach Photo',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink900,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.error,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  '(At least 1 required)',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink500,
+                  ),
+                ),
+              ],
             ),
             if (_attachedPhotos.isNotEmpty)
               Text(
@@ -631,6 +757,17 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
               ),
           ],
         ),
+        if (_validateDetails && _attachedPhotos.isEmpty) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Please attach at least 1 photo of the issue.',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.error,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
 
         SizedBox(
@@ -775,7 +912,30 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
         // Continue button with Gradient and Glow
         InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => setState(() => _currentStep = 3),
+          onTap: () {
+            setState(() => _validateDetails = true);
+            if (_descriptionCtrl.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please add details describing the problem.'),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
+            if (_attachedPhotos.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please attach at least 1 photo of the issue.'),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
+            setState(() => _currentStep = 3);
+          },
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -940,18 +1100,18 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.photo_outlined, size: 20, color: Color(0xFF94A3B8)),
+                      Icon(Icons.photo_outlined, size: 20, color: AppColors.error),
                       SizedBox(width: 8),
                       Text(
-                        'No photos attached (Optional)',
-                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        'At least 1 photo is required',
+                        style: TextStyle(fontSize: 12.5, color: AppColors.error, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -1059,145 +1219,7 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
     );
   }
 
-  // ================= STEP 4: GLOW SUCCESS SCREEN =================
-  Widget _buildSuccessScreen() {
-    final ticketNum = _createdTicketId != null ? '#SL-${_createdTicketId!.toString().padLeft(5, '0')}' : '#SL-02481';
 
-    return Scaffold(
-      backgroundColor: AppColors.navyDark,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-
-              // Glowing Circle Checkmark
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E6BFF), Color(0xFF00E5FF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00E5FF).withValues(alpha: 0.45),
-                      blurRadius: 36,
-                      spreadRadius: 6,
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 48),
-              ),
-              const SizedBox(height: 32),
-
-              // Title
-              const Text(
-                'Report Submitted!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Reference ID
-              Text(
-                'Report $ticketNum',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.cyanGlow,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Description
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Our maintenance team has received your report. You\'ll be notified of any updates.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    color: Colors.white.withValues(alpha: 0.75),
-                    height: 1.4,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Next Update pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.navyCard,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.navyBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.calendar_today_rounded, color: AppColors.electricBlue, size: 18),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Next Update',
-                          style: TextStyle(fontSize: 11, color: Colors.white54, fontWeight: FontWeight.w600),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'September 20, 2026',
-                          style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const Spacer(),
-
-              // View My Report Glowing Action button
-              InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => Navigator.of(context).pop(true),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: AppDecorations.glowButton(
-                    radius: 16,
-                    colors: [const Color(0xFF1E6BFF), const Color(0xFF0F3A8A)],
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'View My Report',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildStepper(int step) {
     return Row(

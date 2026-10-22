@@ -70,10 +70,18 @@ class _ViolationNoticeSheetState extends State<ViolationNoticeSheet> {
   Future<void> _handleAcknowledge() async {
     setState(() => _isSubmitting = true);
     final id = widget.violation['id'] is int ? widget.violation['id'] as int : 0;
-    await ApiService.acknowledgeViolation(id, strike: _strike);
+    final tid = widget.violation['tenant_id'] is int
+        ? widget.violation['tenant_id'] as int
+        : (widget.violation['tenant_id'] != null
+            ? int.tryParse(widget.violation['tenant_id'].toString())
+            : null);
+    await ApiService.acknowledgeViolation(id, strike: _strike, tenantId: tid);
 
     if (!mounted) return;
-    setState(() => _isSubmitting = false);
+    setState(() {
+      _isSubmitting = false;
+      _localAcknowledged = true;
+    });
     Navigator.of(context).pop(true);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -558,7 +566,67 @@ class _ViolationNoticeSheetState extends State<ViolationNoticeSheet> {
     );
   }
 
+  bool? _localAcknowledged;
+  bool get _isAcknowledged {
+    if (_localAcknowledged != null) return _localAcknowledged!;
+    final ack = widget.violation['acknowledged'];
+    return ack == true || ack == 1 || ack == '1';
+  }
+
   Widget _buildActionButtons() {
+    if (_isAcknowledged) {
+      return Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Citation Acknowledged',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF15803D),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_strike >= 3) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Eviction Notice PDF reference generated: Ref #EV-103'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.download_rounded, size: 18, color: AppColors.ink700),
+                label: const Text(
+                  'Download Formal Notice of Eviction (PDF)',
+                  style: TextStyle(fontSize: 13, color: AppColors.ink700, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
     if (_strike >= 3) {
       return Column(
         children: [

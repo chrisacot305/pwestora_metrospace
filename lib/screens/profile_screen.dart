@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 import '../services/theme_service.dart';
 import 'login_screen.dart';
 import 'lease_contract_screen.dart';
-import 'violation_notice_sheet.dart';
+import 'violations_screen.dart';
 import 'payment_arrangement_screen.dart';
 import 'personal_info_screen.dart';
 
@@ -33,6 +33,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _demoRentStatus = 'normal';
   String _demoStrikeCategory = 'past_due';
 
+  int? get _tenantId {
+    final lease = _leaseData ?? widget.lease;
+    if (lease == null) return null;
+    final tid = lease['tenant_id'] ?? lease['id'];
+    if (tid is int) return tid;
+    if (tid is String) return int.tryParse(tid);
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -50,10 +59,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfile() async {
     final name = await ApiService.getUserName();
     final company = await ApiService.getCompanyName();
-    final strike = await ApiService.getDemoStrikeLevel();
+    final strike = await ApiService.getDemoStrikeLevel(tenantId: _tenantId);
     final plan = await ApiService.getDemoRestructuringPlan();
     final rentStatus = await ApiService.getDemoRentStatus();
-    final strikeCat = await ApiService.getDemoStrikeCategory();
+    final strikeCat = await ApiService.getDemoStrikeCategory(tenantId: _tenantId);
     if (mounted) {
       setState(() {
         if (name != null && name.isNotEmpty) _name = name;
@@ -81,39 +90,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _openLeaseStanding() async {
-    final tid = _leaseData?['tenant_id'] ?? _leaseData?['id'] ?? widget.lease?['tenant_id'] ?? widget.lease?['id'];
-    final int? tenantId = tid is int ? tid : (tid != null ? int.tryParse(tid.toString()) : null);
-    final violations = await ApiService.fetchViolations(tenantId: tenantId);
-    if (!mounted) return;
-    if (violations.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: Row(
-            children: const [
-              Icon(Icons.verified_rounded, color: AppColors.success, size: 20),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Account Status: Good Standing. Zero infractions on record.',
-                  style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      await ViolationNoticeSheet.show(
-        context,
-        violation: violations.first,
-        isGated: false,
-      );
-      _loadProfile();
-    }
+  void _openLeaseStanding() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ViolationsScreen(lease: _leaseData ?? widget.lease),
+      ),
+    ).then((_) => _loadProfile());
   }
 
   void _showComingSoon(String title) {
@@ -313,8 +295,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 _buildMenuItem(
                   icon: Icons.gavel_rounded,
-                  title: 'Violations & 3-Strike Policy',
-                  onTap: _showViolationsPolicyModal,
+                  title: 'Violations & Disciplinary Records',
+                  onTap: _openLeaseStanding,
                 ),
                 _buildMenuItem(
                   icon: Icons.assignment_outlined,
@@ -808,202 +790,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showViolationsPolicyModal() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.gavel_rounded, color: Color(0xFFDC2626), size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Violations & 3-Strike Disciplinary Policy',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              color: isDark ? Colors.white : AppColors.midnightNavy,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Commercial lease compliance & legal escalation ladder',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
 
-                // 3 Strikes Ladder Box
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF262626) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'The 3-Strike Escalation Ladder',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildStrikeExplainer(
-                        number: '1',
-                        title: 'Strike 1: Official Notice to Comply',
-                        desc: 'Formal citation logged with 5–7 calendar days cure period. Standard late fee applied.',
-                        color: const Color(0xFF0284C7),
-                        bgColor: const Color(0xFFEFF6FF),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStrikeExplainer(
-                        number: '2',
-                        title: 'Strike 2: Notice of Default & Citation Fine',
-                        desc: '₱500 citation penalty applied, formal demand letter issued, flagged for lease non-renewal.',
-                        color: const Color(0xFFD97706),
-                        bgColor: const Color(0xFFFEF3C7),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStrikeExplainer(
-                        number: '3',
-                        title: 'Strike 3: Material Breach & Eviction',
-                        desc: 'Formal Notice to Vacate served, contract cancelled, deposit forfeited, eviction proceedings initiated.',
-                        color: const Color(0xFFDC2626),
-                        bgColor: const Color(0xFFFEF2F2),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Violation Categories
-                const Text(
-                  'Tracked Violation Categories',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.midnightNavy),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  '• Unpaid Rent Default: Beyond 7-day grace period or broken restructuring installment.\n• Unauthorized Alterations: Structural modifications or drilling without consent.\n• Unauthorized Subleasing: Subletting space to third parties.\n• Use & Nuisance: Hazardous storage, walkway obstruction, or noise breaches.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.45),
-                ),
-                const SizedBox(height: 18),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _openLeaseStanding();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0A1832),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    child: const Text('View Current Lease Standing', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStrikeExplainer({
-    required String number,
-    required String title,
-    required String desc,
-    required Color color,
-    required Color bgColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-            alignment: Alignment.center,
-            child: Text(
-              number,
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildDemoSection() {
     return SliverToBoxAdapter(
@@ -1406,7 +1193,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () async {
-        await ApiService.setDemoStrikeLevel(level);
+        await ApiService.setDemoStrikeLevel(level, tenantId: _tenantId);
         setState(() => _demoStrike = level);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

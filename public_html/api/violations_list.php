@@ -18,24 +18,36 @@ if ($tenantIdParam > 0) {
     $tenantStmt = $pdo->prepare('SELECT id FROM tenants WHERE lessee_id = ? AND id = ? LIMIT 1');
     $tenantStmt->execute([$lessee['id'], $tenantIdParam]);
     $tenantId = $tenantStmt->fetchColumn();
+    if (!$tenantId) {
+        json_ok(['violations' => []]);
+    }
+    $stmt = $pdo->prepare(
+        'SELECT v.id, v.tenant_id, v.lessor_id, u.company_name AS lessor_name,
+                v.category, v.strike, v.acknowledged, v.issued_at
+         FROM violations v
+         JOIN users u ON u.id = v.lessor_id
+         WHERE v.tenant_id = ?
+         ORDER BY v.issued_at DESC'
+    );
+    $stmt->execute([$tenantId]);
 } else {
-    $tenantStmt = $pdo->prepare('SELECT id FROM tenants WHERE lessee_id = ? ORDER BY created_at DESC LIMIT 1');
-    $tenantStmt->execute([$lessee['id']]);
-    $tenantId = $tenantStmt->fetchColumn();
+    $stmt = $pdo->prepare(
+        'SELECT v.id, v.tenant_id, v.lessor_id, u.company_name AS lessor_name,
+                v.category, v.strike, v.acknowledged, v.issued_at
+         FROM violations v
+         JOIN users u ON u.id = v.lessor_id
+         JOIN tenants t ON t.id = v.tenant_id
+         WHERE t.lessee_id = ?
+         ORDER BY v.issued_at DESC'
+    );
+    $stmt->execute([$lessee['id']]);
 }
-
-if (!$tenantId) {
-    json_ok(['violations' => []]);
-}
-
-$stmt = $pdo->prepare(
-    'SELECT id, category, strike, acknowledged, issued_at
-     FROM violations WHERE tenant_id = ? ORDER BY issued_at DESC'
-);
-$stmt->execute([$tenantId]);
 $violations = $stmt->fetchAll();
 
 foreach ($violations as &$v) {
+    $v['id'] = (int) $v['id'];
+    $v['tenant_id'] = (int) $v['tenant_id'];
+    $v['lessor_id'] = (int) $v['lessor_id'];
     $v['strike'] = (int) $v['strike'];
     $v['acknowledged'] = (bool) $v['acknowledged'];
 }

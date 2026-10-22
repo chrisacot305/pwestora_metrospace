@@ -683,59 +683,97 @@ class ApiService {
 
   // ---------------- Conflict Resolution / Violations (Section C) ----------------
 
-  static const String _kDemoStrikeKey = 'demo_violation_strike_level';
-  static const String _kAcknowledgedStrikesKey = 'demo_acknowledged_strikes';
-  static const String _kDemoStrikeCategoryKey = 'demo_violation_strike_category';
+  static String _demoStrikeKey(int? tenantId) =>
+      tenantId != null && tenantId > 0
+          ? 'demo_violation_strike_level_$tenantId'
+          : 'demo_violation_strike_level';
 
-  static Future<int> getDemoStrikeLevel() async {
+  static String _demoAckKey(int? tenantId) =>
+      tenantId != null && tenantId > 0
+          ? 'demo_acknowledged_strikes_$tenantId'
+          : 'demo_acknowledged_strikes';
+
+  static String _demoStrikeCatKey(int? tenantId) =>
+      tenantId != null && tenantId > 0
+          ? 'demo_violation_strike_category_$tenantId'
+          : 'demo_violation_strike_category';
+
+  static Future<int> getDemoStrikeLevel({int? tenantId}) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_kDemoStrikeKey) ?? 0;
+    return prefs.getInt(_demoStrikeKey(tenantId)) ?? 0;
   }
 
-  static Future<void> setDemoStrikeLevel(int level) async {
+  static Future<void> setDemoStrikeLevel(int level, {int? tenantId}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kDemoStrikeKey, level);
+    final strikeKey = _demoStrikeKey(tenantId);
+    await prefs.setInt(strikeKey, level);
     // Reset acknowledged set if we switch levels
-    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    final ackKey = _demoAckKey(tenantId);
+    final ackList = prefs.getStringList(ackKey) ?? [];
     if (level == 0) {
-      await prefs.remove(_kAcknowledgedStrikesKey);
+      await prefs.remove(ackKey);
     } else {
       // Remove this level from acknowledged list so modal triggers
       ackList.remove(level.toString());
-      await prefs.setStringList(_kAcknowledgedStrikesKey, ackList);
+      await prefs.setStringList(ackKey, ackList);
     }
   }
 
-  static Future<String> getDemoStrikeCategory() async {
+  static Future<String> getDemoStrikeCategory({int? tenantId}) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kDemoStrikeCategoryKey) ?? 'past_due';
+    return prefs.getString(_demoStrikeCatKey(tenantId)) ?? 'past_due';
   }
 
-  static Future<void> setDemoStrikeCategory(String cat) async {
+  static Future<void> setDemoStrikeCategory(String cat, {int? tenantId}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kDemoStrikeCategoryKey, cat);
+    await prefs.setString(_demoStrikeCatKey(tenantId), cat);
   }
 
-  static Future<List<Map<String, dynamic>>> fetchViolations({int? tenantId}) async {
+  static Future<List<Map<String, dynamic>>> fetchViolations({
+    int? tenantId,
+    String? lessorName,
+  }) async {
     try {
       final query = (tenantId != null && tenantId > 0) ? '?tenant_id=$tenantId' : '';
       final data = await _getJson('violations_list.php$query', auth: true);
-      final raw = (data['violations'] as List<dynamic>?) ?? [];
-      if (raw.isNotEmpty) {
-        return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (data['violations'] is List) {
+        final raw = data['violations'] as List<dynamic>;
+        var list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+        // 1. Strict client-side filter by tenantId (if present in the record)
+        if (tenantId != null && tenantId > 0) {
+          list = list.where((v) {
+            final vTid = v['tenant_id'];
+            if (vTid == null) return true;
+            final int? vid = vTid is int ? vTid : int.tryParse(vTid.toString());
+            return vid == null || vid == tenantId;
+          }).toList();
+        }
+
+        // 2. Strict client-side filter by lessorName (prevents violations from other landlords leaking)
+        if (lessorName != null && lessorName.trim().isNotEmpty) {
+          final target = lessorName.trim().toLowerCase();
+          list = list.where((v) {
+            final vLessor = (v['lessor_name'] ?? '').toString().trim().toLowerCase();
+            if (vLessor.isEmpty) return true;
+            return vLessor == target;
+          }).toList();
+        }
+
+        return list;
       }
     } catch (_) {
-      // Offline or demo fallback
+      // Offline or server connection fallback
     }
 
-    // Fallback based on Demo Strike Level
-    final level = await getDemoStrikeLevel();
+    // Fallback based on Demo Strike Level (isolated per building / tenantId)
+    final level = await getDemoStrikeLevel(tenantId: tenantId);
     if (level <= 0) return [];
 
     final prefs = await SharedPreferences.getInstance();
-    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    final ackList = prefs.getStringList(_demoAckKey(tenantId)) ?? [];
     final isAck = ackList.contains(level.toString());
-    final cat = await getDemoStrikeCategory();
+    final cat = await getDemoStrikeCategory(tenantId: tenantId);
     final isPastDue = cat == 'past_due';
 
     final list = <Map<String, dynamic>>[];
@@ -799,7 +837,7 @@ class ApiService {
     return list.reversed.toList();
   }
 
-  static Future<bool> acknowledgeViolation(int violationId, {int? strike}) async {
+  static Future<bool> acknowledgeViolation(int violationId, {int? strike, int? tenantId}) async {
     try {
       final res = await _postJson('violations_acknowledge.php', {
         'violation_id': violationId,
@@ -807,13 +845,14 @@ class ApiService {
       if (res['ok'] == true) return true;
     } catch (_) {}
 
-    // Save locally for demo mode
+    // Save locally for demo mode (isolated per tenantId)
     final prefs = await SharedPreferences.getInstance();
-    final ackList = prefs.getStringList(_kAcknowledgedStrikesKey) ?? [];
+    final ackKey = _demoAckKey(tenantId);
+    final ackList = prefs.getStringList(ackKey) ?? [];
     if (strike != null) {
       if (!ackList.contains(strike.toString())) {
         ackList.add(strike.toString());
-        await prefs.setStringList(_kAcknowledgedStrikesKey, ackList);
+        await prefs.setStringList(ackKey, ackList);
       }
     }
     return true;

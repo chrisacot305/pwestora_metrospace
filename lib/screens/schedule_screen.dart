@@ -166,7 +166,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ? kTicketStages[stage]
             : 'In Progress';
         final submittedDateStr = _formatDate(dt);
-        final subtitle = '$stageLabel • Submitted $submittedDateStr';
+        final subtitle = stageLabel.trim().toLowerCase() == 'submitted'
+            ? (submittedDateStr.isNotEmpty ? 'Submitted $submittedDateStr' : 'Submitted')
+            : (submittedDateStr.isNotEmpty ? '$stageLabel • Submitted $submittedDateStr' : stageLabel);
 
         String displayTitle = t['title']?.toString().trim() ?? '';
         if (displayTitle.startsWith('[')) {

@@ -35,6 +35,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['issue_violation'])) {
 
             $pdo->prepare('INSERT INTO violations (lessor_id, tenant_id, category, strike) VALUES (?, ?, ?, ?)')
                 ->execute([$lessorId, $tenantId, $category, $newStrike]);
+
+            // Ensure message thread exists between lessor and tenant
+            $threadStmt = $pdo->prepare('SELECT id FROM message_threads WHERE lessor_id = ? AND tenant_id = ?');
+            $threadStmt->execute([$lessorId, $tenantId]);
+            $threadId = $threadStmt->fetchColumn();
+            if (!$threadId) {
+                $pdo->prepare('INSERT INTO message_threads (lessor_id, tenant_id) VALUES (?, ?)')->execute([$lessorId, $tenantId]);
+                $threadId = (int) $pdo->lastInsertId();
+            }
+
+            $strikeBadge = "STRIKE $newStrike OF 3";
+            $penaltyLine = $newStrike == 2
+                ? "\nPenalty Injected: ₱500.00 late/infraction penalty added to billing statement."
+                : ($newStrike >= 3
+                    ? "\nPenalty Injected: ₱1,500.00 penalty & Formal Lease Termination / Eviction proceedings initiated."
+                    : "\nAction Required: Immediate compliance with commercial property guidelines.");
+
+            $msgBody = "⚠️ OFFICIAL NOTICE OF INFRACTION ($strikeBadge)\nCategory: $category$penaltyLine\n\nA formal citation has been officially recorded against your lease agreement. Please review the citation details and disciplinary policy under your account.";
+
+            $pdo->prepare('INSERT INTO messages (thread_id, sender, notice_type, body) VALUES (?, "lessor", "Infraction Notice", ?)')
+                ->execute([$threadId, $msgBody]);
+
             audit_log($pdo, $lessorId, 'Issued violation', "$category — strike $newStrike");
 
             header('Location: /dashboard.php?page=violations');

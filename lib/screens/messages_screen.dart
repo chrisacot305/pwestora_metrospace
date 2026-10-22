@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import 'violation_notice_sheet.dart';
+import 'violations_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
   final Map<String, dynamic>? lease;
@@ -81,6 +83,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant MessagesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lease != oldWidget.lease) {
+      _loadData(initial: true);
+    }
+  }
+
+  @override
   void dispose() {
     _pollingTimer?.cancel();
     _focusNode.dispose();
@@ -105,6 +115,50 @@ class _MessagesScreenState extends State<MessagesScreen> {
       try {
         final t = await ApiService.fetchTickets(tenantId: tid);
         _tickets = t;
+      } catch (_) {}
+
+      // Fetch violations for this specific tenant/building so they appear in chat
+      try {
+        final violations = await ApiService.fetchViolations(
+          tenantId: tid,
+          lessorName: lessor ?? _lessorName,
+        );
+        for (final v in violations) {
+          // Verify that this violation actually matches the active chat landlord
+          if (v['lessor_name'] != null && _lessorName.isNotEmpty) {
+            final vLessor = v['lessor_name'].toString().trim().toLowerCase();
+            final curLessor = (lessor ?? _lessorName).trim().toLowerCase();
+            if (vLessor.isNotEmpty && curLessor.isNotEmpty && vLessor != curLessor) {
+              continue;
+            }
+          }
+          if (v['tenant_id'] != null && tid != null) {
+            final int? vTid = v['tenant_id'] is int ? v['tenant_id'] as int : int.tryParse(v['tenant_id'].toString());
+            if (vTid != null && vTid != tid) {
+              continue;
+            }
+          }
+          final strike = v['strike'] is int
+              ? v['strike'] as int
+              : int.tryParse(v['strike']?.toString() ?? '1') ?? 1;
+
+          // Only attach to real messages in this thread
+          final idx = parsedMsgs.indexWhere((m) {
+            final b = (m['body'] ?? '').toString();
+            final isNotice = m['notice_type'] == 'Infraction Notice' || m['notice_type'] == 'violation';
+            return (b.contains('OFFICIAL NOTICE OF INFRACTION') || isNotice) &&
+                (b.contains('STRIKE $strike') || b.contains('Strike $strike') || strike == 1);
+          });
+          if (idx != -1 && parsedMsgs[idx]['violation_data'] == null) {
+            parsedMsgs[idx]['violation_data'] = v;
+          }
+        }
+        // Sort chronologically by sent_at
+        parsedMsgs.sort((a, b) {
+          final tA = DateTime.tryParse(a['sent_at']?.toString() ?? '') ?? DateTime(1970);
+          final tB = DateTime.tryParse(b['sent_at']?.toString() ?? '') ?? DateTime(1970);
+          return tA.compareTo(tB);
+        });
       } catch (_) {}
 
       if (mounted) {
@@ -206,6 +260,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
         );
       }
     }
+  }
+
+  bool _isViolationMessage(String body, String? noticeType) {
+    if (noticeType == 'Infraction Notice' || noticeType == 'violation') return true;
+    return body.contains('OFFICIAL NOTICE OF INFRACTION') ||
+        body.contains('Infraction Notice') ||
+        (body.contains('⚠️') && body.contains('Strike'));
   }
 
   bool _isReportMessage(String body) {
@@ -353,6 +414,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                 final isMe = msg['sender'] == 'tenant';
                                 final body = msg['body'] ?? '';
                                 final sentAt = msg['sent_at']?.toString();
+                                final noticeType = msg['notice_type']?.toString();
+                                final isViolation =
+                                    _isViolationMessage(body, noticeType);
                                 final isReport = _isReportMessage(body);
                                 final isRestructure =
                                     _isRestructuringMessage(body);
@@ -360,7 +424,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                     _expandedMessageIndices.contains(index);
 
                                 Widget bubbleContent;
-                                if (isReport) {
+                                if (isViolation) {
+                                  bubbleContent =
+                                      _buildSpecialViolationBubble(msg, body);
+                                } else if (isReport) {
                                   bubbleContent =
                                       _buildSpecialReportBubble(body, isMe);
                                 } else if (isRestructure) {
@@ -618,6 +685,339 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
+  // ================= SPECIAL INTERACTIVE CITATION / VIOLATION BUBBLE =================
+  Widget _buildSpecialViolationBubble(Map<String, dynamic> msg, String body) {
+    final vData = msg['violation_data'] as Map<String, dynamic>?;
+    int strike = 1;
+    if (vData != null && vData['strike'] != null) {
+      strike = vData['strike'] is int
+          ? vData['strike'] as int
+          : int.tryParse(vData['strike'].toString()) ?? 1;
+    } else if (body.contains('STRIKE 3') || body.contains('Strike 3')) {
+      strike = 3;
+    } else if (body.contains('STRIKE 2') || body.contains('Strike 2')) {
+      strike = 2;
+    }
+
+    String category = 'Lease Violation';
+    if (vData != null && vData['category'] != null) {
+      category = vData['category'].toString();
+    } else if (body.contains('Category:')) {
+      final catPart = body.split('Category:').last.split('\n').first.trim();
+      if (catPart.isNotEmpty) category = catPart;
+    }
+
+    final isEviction = strike >= 3;
+    final isSecond = strike == 2;
+
+    final primaryColor = isEviction
+        ? const Color(0xFFDC2626) // Deep Red
+        : (isSecond ? const Color(0xFFD97706) : const Color(0xFF1E6BFF)); // Amber vs Electric Blue
+
+    final headerBgColor = isEviction
+        ? const Color(0xFFFEF2F2)
+        : (isSecond ? const Color(0xFFFFFBEB) : const Color(0xFFEFF6FF));
+
+    final borderColor = isEviction
+        ? const Color(0xFFFCA5A5)
+        : (isSecond ? const Color(0xFFFCD34D) : const Color(0xFFBFDBFE));
+
+    final badgeBg = isEviction
+        ? const Color(0xFFEF4444)
+        : (isSecond ? const Color(0xFFF59E0B) : const Color(0xFF2563EB));
+
+    final headerTitle = isEviction
+        ? 'Final Notice • Eviction Proceeding'
+        : (isSecond
+            ? '2nd Notice • ₱500 Penalty Injected'
+            : 'Official Notice • Formal Warning');
+
+    final penaltyAmount =
+        isEviction ? '₱1,500.00' : (isSecond ? '₱500.00' : '₱0.00');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Banner
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: headerBgColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(19),
+                    topRight: Radius.circular(19),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isEviction
+                            ? Icons.gavel_rounded
+                            : (isSecond
+                                ? Icons.warning_amber_rounded
+                                : Icons.shield_outlined),
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        headerTitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: primaryColor,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Strike $strike of 3',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Card Body
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            category.toLowerCase().contains('rent') ||
+                                    category.toLowerCase().contains('payment')
+                                ? Icons.receipt_long_rounded
+                                : Icons.warning_rounded,
+                            size: 18,
+                            color: primaryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Offense Classification',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                category,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0B1B3D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Contractual Disciplinary Impact',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                              if (strike > 1)
+                                Text(
+                                  penaltyAmount,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: primaryColor,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isEviction
+                                ? 'Three cumulative strikes recorded. Commercial premises possession is revoked subject to immediate formal eviction under lease default terms.'
+                                : (isSecond
+                                    ? 'Second infraction recorded against this lease. An automated ₱500 penalty surcharge has been billed to your statement of account.'
+                                    : 'First formal warning citation. Acknowledgment receipt is required to verify notice delivery. Further violations escalate penalties.'),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF64748B),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 10),
+
+                    // Actions row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ViolationsScreen(lease: widget.lease),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            children: const [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 14,
+                                color: Color(0xFF64748B),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'All Records',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            final violationMap = vData ?? {
+                              'id': 100 + strike,
+                              'category': category,
+                              'strike': strike,
+                              'penalty_amount': strike == 2
+                                  ? 500.0
+                                  : (strike >= 3 ? 1500.0 : 0.0),
+                              'issued_at': msg['sent_at'] ?? 'Recently',
+                              'acknowledged': 1,
+                            };
+                            await ViolationNoticeSheet.show(
+                              context,
+                              violation: violationMap,
+                              isGated: false,
+                            );
+                            _loadData(silent: true);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: const [
+                                Text(
+                                  'View Citation',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(width: 4),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ================= SPECIAL INTERACTIVE REPORT BUBBLE =================
   IconData _getReportCategoryIcon(String category) {
     final cat = category.toLowerCase();
@@ -652,33 +1052,81 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _buildSpecialReportBubble(String body, bool isMe) {
-    bool isApproved =
-        body.contains('Approved') ||
-        body.contains('Scheduled') ||
-        body.toLowerCase().contains('completed') ||
-        _tickets.any((t) => (t['stage'] as num? ?? 0) >= 2);
+    bool isCompleted = body.toLowerCase().contains('completed') ||
+        _tickets.any((t) => (t['stage'] as num? ?? 0) >= 3);
+    bool isApproved = !isCompleted &&
+        (body.contains('Approved') ||
+            body.contains('Scheduled') ||
+            _tickets.any((t) => (t['stage'] as num? ?? 0) >= 2));
 
     String ticketNumber = body.contains('#SL-')
         ? body.substring(
             body.indexOf('#SL-'),
             (body.indexOf('#SL-') + 9).clamp(0, body.length),
           )
-        : '#SL-02481';
+        : (body.contains('#MT-')
+            ? body.substring(
+                body.indexOf('#MT-'),
+                (body.indexOf('#MT-') + 9).clamp(0, body.length),
+              )
+            : '#SL-02481');
 
     String description =
-        'Water is leaking from the toilet bowl and the floor is wet.';
+        'Maintenance service request filed for lessor evaluation.';
     if (body.contains('Description:')) {
       final descPart = body.split('Description:').last.split('\n').first.trim();
       if (descPart.isNotEmpty) description = descPart;
     }
 
-    String category = 'Comfort Room • Water leakage';
+    String category = 'Maintenance & Repair';
     if (body.contains('Category:')) {
       final catPart = body.split('Category:').last.split('\n').first.trim();
       if (catPart.isNotEmpty) category = catPart;
     }
 
     final catIcon = _getReportCategoryIcon(category);
+
+    final primaryColor = isCompleted
+        ? const Color(0xFF10B981) // Emerald Green
+        : (isApproved
+            ? const Color(0xFF1E6BFF) // Electric Blue
+            : const Color(0xFFD97706)); // Amber / Warm Orange
+
+    final headerBgColor = isCompleted
+        ? const Color(0xFFECFDF5)
+        : (isApproved
+            ? const Color(0xFFEFF6FF)
+            : const Color(0xFFFFFBEB));
+
+    final borderColor = isCompleted
+        ? const Color(0xFFA7F3D0)
+        : (isApproved
+            ? const Color(0xFFBFDBFE)
+            : const Color(0xFFFCD34D));
+
+    final badgeBg = isCompleted
+        ? const Color(0xFF10B981)
+        : (isApproved
+            ? const Color(0xFF2563EB)
+            : const Color(0xFFF59E0B));
+
+    final headerTitle = isCompleted
+        ? 'Maintenance Resolved • Work Signed Off'
+        : (isApproved
+            ? 'Report Approved • Maintenance Scheduled'
+            : 'Maintenance Request • Pending Review');
+
+    final statusPillText = isCompleted
+        ? 'Completed'
+        : (isApproved ? 'Scheduled' : 'Pending Review');
+
+    final headerIcon = isCompleted
+        ? Icons.check_rounded
+        : (isApproved ? Icons.event_available_rounded : Icons.access_time_rounded);
+
+    final scheduleDate = isCompleted
+        ? 'Signed Off: Today'
+        : (isApproved ? 'Scheduled: In Calendar' : 'Expected: 24–48 hrs');
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
@@ -689,15 +1137,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isApproved
-                  ? const Color(0xFF10B981).withValues(alpha: 0.4)
-                  : const Color(0xFFE2E8F0),
-              width: 1.2,
-            ),
+            border: Border.all(color: borderColor, width: 1.2),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0B1B3D).withValues(alpha: 0.06),
+                color: primaryColor.withValues(alpha: 0.08),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -706,19 +1149,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header banner
+              // Top Banner
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: isApproved
-                      ? const Color(0xFFECFDF5)
-                      : const Color(0xFFFFFBEB),
+                  color: headerBgColor,
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+                    topLeft: Radius.circular(19),
+                    topRight: Radius.circular(19),
                   ),
                 ),
                 child: Row(
@@ -726,15 +1167,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: isApproved
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFFF59E0B),
+                        color: badgeBg,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        isApproved
-                            ? Icons.check_rounded
-                            : Icons.access_time_rounded,
+                        headerIcon,
                         color: Colors.white,
                         size: 14,
                       ),
@@ -742,31 +1179,38 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isApproved
-                            ? 'Report Approved & Scheduled'
-                            : 'Report Filed (Pending Review)',
+                        headerTitle,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: isApproved
-                              ? const Color(0xFF065F46)
-                              : const Color(0xFF92400E),
+                          color: primaryColor,
+                          letterSpacing: -0.2,
                         ),
                       ),
                     ),
-                    Text(
-                      ticketNumber,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        statusPillText,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Body content
+              // Card Body
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -775,35 +1219,37 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     Row(
                       children: [
                         Container(
-                          width: 38,
-                          height: 38,
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0B1B3D),
+                            color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(catIcon, color: Colors.white, size: 18),
+                          child: Icon(
+                            catIcon,
+                            size: 18,
+                            color: primaryColor,
+                          ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                category,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0B1B3D),
+                              const Text(
+                                'Issue Classification',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                description,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                category,
                                 style: const TextStyle(
-                                  fontSize: 12.5,
-                                  color: Color(0xFF64748B),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0B1B3D),
                                 ),
                               ),
                             ],
@@ -811,70 +1257,119 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         ),
                       ],
                     ),
-
-                    const SizedBox(height: 14),
-                    const Divider(color: Color(0xFFF1F5F9), height: 1),
                     const SizedBox(height: 12),
 
-                    // Date & Calendar Direct Link
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Maintenance Scope & Description',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                              Text(
+                                ticketNumber,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF64748B),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 10),
+
+                    // Actions row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.calendar_month_rounded,
-                              size: 16,
-                              color: Color(0xFF1E6BFF),
+                              size: 14,
+                              color: primaryColor,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Text(
-                              isApproved
-                                  ? 'Scheduled: Sep 24 • 10:00 AM'
-                                  : 'Expected update: Today',
+                              scheduleDate,
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF334155),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF475569),
                               ),
                             ),
                           ],
                         ),
-
-                        // Direct Link Button to Schedule Screen
                         InkWell(
                           onTap: () {
                             if (widget.onNavigateTab != null) {
-                              widget.onNavigateTab!(
-                                1,
-                              ); // Switch to Schedule tab
+                              widget.onNavigateTab!(1); // Go to Schedule tab
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                    'Switched to Schedule for Sep 24!',
-                                  ),
+                                  content: Text('Switched to Schedule Calendar!'),
                                 ),
                               );
                             }
                           },
-                          child: Row(
-                            children: const [
-                              Text(
-                                'View in Calendar',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF1E6BFF),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: const [
+                                Text(
+                                  'View in Schedule',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(width: 3),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 14,
-                                color: Color(0xFF1E6BFF),
-                              ),
-                            ],
+                                SizedBox(width: 4),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

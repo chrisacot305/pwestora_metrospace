@@ -6,6 +6,7 @@ import 'ticket_detail_screen.dart';
 import 'payment_arrangement_screen.dart';
 import 'rent_payment_screen.dart';
 import 'violation_notice_sheet.dart';
+import 'violations_screen.dart';
 import 'receipts_history_screen.dart';
 import 'messages_screen.dart';
 import 'my_applications_screen.dart';
@@ -41,7 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<String> _rentStatusFuture;
   String _userName = '';
   String _companyName = '';
-  bool _gateChecked = false;
+  final Set<int> _checkedTenantIds = {};
 
   // GlobeOne-style multi-account switcher state
   List<Map<String, dynamic>> _allLeases = [];
@@ -65,17 +66,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final initialTenantId = initialTid is int
         ? initialTid
         : (initialTid != null ? int.tryParse(initialTid.toString()) : null);
+    final initialLessor = (widget.lease['lessor_name'] ?? '').toString();
     _ticketsFuture = ApiService.fetchTickets(tenantId: initialTenantId);
     _arrangementsFuture = ApiService.fetchInstallmentRequests(
       tenantId: initialTenantId,
     );
-    _violationsFuture = ApiService.fetchViolations(tenantId: initialTenantId);
+    _violationsFuture = ApiService.fetchViolations(
+      tenantId: initialTenantId,
+      lessorName: initialLessor,
+    );
     _rentStatusFuture = ApiService.getDemoRentStatus();
     _loadUserName();
     _loadAllLeases();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPendingViolations();
+      _checkPendingViolations(tenantId: initialTenantId);
     });
   }
 
@@ -94,6 +99,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _carouselPageIndex = widget.activeLeaseIndex;
       });
       _cardPageController.jumpToPage(widget.activeLeaseIndex);
+      _loadAccountFutures(_activeTenantId);
     }
   }
 
@@ -147,22 +153,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _loadAccountFutures(int? tenantId) {
+    final lessor = (_activeLease['lessor_name'] ?? '').toString();
     setState(() {
       _ticketsFuture = ApiService.fetchTickets(tenantId: tenantId);
       _arrangementsFuture = ApiService.fetchInstallmentRequests(
         tenantId: tenantId,
       );
-      _violationsFuture = ApiService.fetchViolations(tenantId: tenantId);
+      _violationsFuture = ApiService.fetchViolations(
+        tenantId: tenantId,
+        lessorName: lessor,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPendingViolations(tenantId: tenantId);
     });
   }
 
-  Future<void> _checkPendingViolations() async {
-    if (_gateChecked) return;
-    _gateChecked = true;
+  Future<void> _checkPendingViolations({int? tenantId}) async {
+    final effectiveId = tenantId ?? _activeTenantId ?? 0;
+    if (_checkedTenantIds.contains(effectiveId)) return;
+    _checkedTenantIds.add(effectiveId);
     try {
-      final violations = await _violationsFuture;
+      final activeLessor = (_activeLease['lessor_name'] ?? '').toString();
+      final rawViolations = await ApiService.fetchViolations(
+        tenantId: effectiveId > 0 ? effectiveId : null,
+        lessorName: activeLessor,
+      );
       if (!mounted) return;
-      // Find the highest unacknowledged violation
+      // Filter out violations that belong to a different landlord
+      final violations = rawViolations.where((v) {
+        if (v['lessor_name'] != null && activeLessor.isNotEmpty) {
+          final vLessor = v['lessor_name'].toString().trim().toLowerCase();
+          if (vLessor.isNotEmpty &&
+              vLessor != activeLessor.trim().toLowerCase()) {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
+
       final unack = violations
           .where((v) => (v['acknowledged'] == 0 || v['acknowledged'] == false))
           .toList();
@@ -191,10 +220,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _refresh() async {
     final tid = _activeTenantId;
+    final lessor = (_activeLease['lessor_name'] ?? '').toString();
     setState(() {
       _ticketsFuture = ApiService.fetchTickets(tenantId: tid);
       _arrangementsFuture = ApiService.fetchInstallmentRequests(tenantId: tid);
-      _violationsFuture = ApiService.fetchViolations(tenantId: tid);
+      _violationsFuture = ApiService.fetchViolations(
+        tenantId: tid,
+        lessorName: lessor,
+      );
       _rentStatusFuture = ApiService.getDemoRentStatus();
     });
     await Future.wait([
@@ -823,7 +856,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _violationsFuture,
                 builder: (context, snapshot) {
-                  final violations = snapshot.data ?? [];
+                  final rawViolations = snapshot.data ?? [];
+                  final activeTid = _activeTenantId;
+                  final activeLessor = (_activeLease['lessor_name'] ?? '')
+                      .toString()
+                      .trim()
+                      .toLowerCase();
+
+                  final violations = rawViolations.where((v) {
+                    if (v['tenant_id'] != null && activeTid != null) {
+                      final int? vTid = v['tenant_id'] is int
+                          ? v['tenant_id'] as int
+                          : int.tryParse(v['tenant_id'].toString());
+                      if (vTid != null && vTid != activeTid) return false;
+                    }
+                    if (v['lessor_name'] != null && activeLessor.isNotEmpty) {
+                      final vLessor =
+                          v['lessor_name'].toString().trim().toLowerCase();
+                      if (vLessor.isNotEmpty && vLessor != activeLessor) {
+                        return false;
+                      }
+                    }
+                    return true;
+                  }).toList();
+
                   if (violations.isEmpty) return const SizedBox.shrink();
 
                   final latest = violations.first;
@@ -837,10 +893,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(14),
                       onTap: () async {
-                        await ViolationNoticeSheet.show(
-                          context,
-                          violation: latest,
-                          isGated: false,
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ViolationsScreen(lease: _activeLease),
+                          ),
                         );
                         _refresh();
                       },
@@ -1220,10 +1276,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 subtitle: '₱${_formatMoney(fine)} Billed • $dateIssued',
                                 trailing: 'Notice',
                                 onTap: () async {
-                                  await ViolationNoticeSheet.show(
-                                    context,
-                                    violation: latest,
-                                    isGated: false,
+                                  await Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => ViolationsScreen(lease: _activeLease),
+                                    ),
                                   );
                                   _refresh();
                                 },
@@ -1415,9 +1471,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isResolved = stageNum >= kTicketStages.length - 1;
 
     final submittedDateStr = _formatDate(ticket['created_at']);
-    final detailsSubtitle = submittedDateStr.isNotEmpty
-        ? '$stageName • Submitted $submittedDateStr'
-        : stageName;
+    final detailsSubtitle = stageName.trim().toLowerCase() == 'submitted'
+        ? (submittedDateStr.isNotEmpty ? 'Submitted $submittedDateStr' : 'Submitted')
+        : (submittedDateStr.isNotEmpty ? '$stageName • Submitted $submittedDateStr' : stageName);
 
     return _buildActivityRow(
       isDark: isDark,
