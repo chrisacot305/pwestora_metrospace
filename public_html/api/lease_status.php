@@ -17,11 +17,14 @@ $lessee = require_lessee_auth($pdo);
 
 $stmt = $pdo->prepare(
     "SELECT t.id AS tenant_id, t.property_id, t.created_at AS since,
+            t.start_date, t.end_date, t.due_day,
             COALESCE(NULLIF(t.business_name, ''), a.business_name, '') AS business_name,
             t.unit_label,
             p.name AS property_name, p.address AS property_address, p.type AS property_type,
+            p.description AS property_description, p.floor_area, p.lease_term, p.escalation,
+            p.latitude, p.longitude,
             (SELECT photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo,
-            u.company_name AS lessor_name,
+            u.company_name AS lessor_name, u.email AS lessor_email, u.phone AS lessor_phone,
             a.rent, a.term_months
      FROM tenants t
      JOIN properties p ON p.id = t.property_id
@@ -29,7 +32,7 @@ $stmt = $pdo->prepare(
      LEFT JOIN applications a ON a.id = t.application_id
      WHERE t.lessee_id = ?
      ORDER BY t.created_at DESC"
-);
+ );
 $stmt->execute([$lessee['id']]);
 $leases = $stmt->fetchAll();
 

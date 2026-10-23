@@ -4,6 +4,7 @@ import 'services/api_service.dart';
 import 'services/theme_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_shell.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +26,7 @@ class PwestoraApp extends StatelessWidget {
           theme: buildAppTheme(),
           darkTheme: buildDarkAppTheme(),
           themeMode: currentThemeMode,
-          home: const AuthGate(),
+          home: const SplashScreen(),
         );
       },
     );

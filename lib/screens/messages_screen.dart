@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../services/api_service.dart';
 import 'violation_notice_sheet.dart';
 import 'violations_screen.dart';
+import 'ticket_detail_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
   final Map<String, dynamic>? lease;
@@ -151,6 +152,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
           });
           if (idx != -1 && parsedMsgs[idx]['violation_data'] == null) {
             parsedMsgs[idx]['violation_data'] = v;
+          } else if (idx == -1) {
+            // Fallback: If no chat message exists in the database thread for this violation,
+            // synthesize an official citation card entry in parsedMsgs so it appears in the chat feed!
+            final strikeBadge = 'STRIKE $strike OF 3';
+            final penaltyLine = strike == 2
+                ? '\nPenalty Injected: ₱500.00 late/infraction penalty added to billing statement.'
+                : (strike >= 3
+                    ? '\nPenalty Injected: ₱1,500.00 penalty & Formal Lease Termination / Eviction proceedings initiated.'
+                    : '\nAction Required: Immediate compliance with commercial property guidelines.');
+            final category = v['category']?.toString() ?? 'Lease Violation';
+            final msgBody = '⚠️ OFFICIAL NOTICE OF INFRACTION ($strikeBadge)\nCategory: $category$penaltyLine\n\nA formal citation has been officially recorded against your lease agreement. Please review the citation details and disciplinary policy under your account.';
+
+            final vId = v['id'] is int ? v['id'] as int : int.tryParse(v['id']?.toString() ?? '0') ?? 0;
+            parsedMsgs.add({
+              'id': -1000 - vId,
+              'sender': 'lessor',
+              'notice_type': 'Infraction Notice',
+              'body': msgBody,
+              'sent_at': v['issued_at'] ?? DateTime.now().toIso8601String(),
+              'violation_data': v,
+            });
           }
         }
         // Sort chronologically by sent_at
@@ -1051,6 +1073,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return Icons.build_rounded;
   }
 
+  void _openTicketDetail(Map<String, dynamic> ticket) {
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => TicketDetailScreen(ticket: ticket),
+          ),
+        )
+        .then((_) => _loadData());
+  }
+
   Widget _buildSpecialReportBubble(String body, bool isMe) {
     bool isCompleted = body.toLowerCase().contains('completed') ||
         _tickets.any((t) => (t['stage'] as num? ?? 0) >= 3);
@@ -1059,30 +1091,93 @@ class _MessagesScreenState extends State<MessagesScreen> {
             body.contains('Scheduled') ||
             _tickets.any((t) => (t['stage'] as num? ?? 0) >= 2));
 
-    String ticketNumber = body.contains('#SL-')
-        ? body.substring(
-            body.indexOf('#SL-'),
-            (body.indexOf('#SL-') + 9).clamp(0, body.length),
-          )
-        : (body.contains('#MT-')
-            ? body.substring(
-                body.indexOf('#MT-'),
-                (body.indexOf('#MT-') + 9).clamp(0, body.length),
-              )
-            : '#SL-02481');
+    String ticketNumber = '';
+    if (body.contains('#SL-')) {
+      ticketNumber = body.substring(
+        body.indexOf('#SL-'),
+        (body.indexOf('#SL-') + 9).clamp(0, body.length),
+      );
+    } else if (body.contains('#MT-')) {
+      ticketNumber = body.substring(
+        body.indexOf('#MT-'),
+        (body.indexOf('#MT-') + 9).clamp(0, body.length),
+      );
+    }
 
-    String description =
-        'Maintenance service request filed for lessor evaluation.';
+    String description = '';
     if (body.contains('Description:')) {
       final descPart = body.split('Description:').last.split('\n').first.trim();
       if (descPart.isNotEmpty) description = descPart;
     }
 
-    String category = 'Maintenance & Repair';
+    String category = '';
     if (body.contains('Category:')) {
       final catPart = body.split('Category:').last.split('\n').first.trim();
       if (catPart.isNotEmpty) category = catPart;
     }
+
+    // Match or construct dynamic ticket object
+    int? parsedId;
+    final numMatch = RegExp(r'\d+').firstMatch(ticketNumber);
+    if (numMatch != null) {
+      parsedId = int.tryParse(numMatch.group(0)!);
+    }
+
+    Map<String, dynamic>? matchingTicket;
+    if (parsedId != null && _tickets.isNotEmpty) {
+      for (final t in _tickets) {
+        final tid = t['id'] is int ? t['id'] : int.tryParse(t['id']?.toString() ?? '');
+        if (tid != null && tid == parsedId) {
+          matchingTicket = Map<String, dynamic>.from(t as Map);
+          break;
+        }
+      }
+    }
+
+    if (matchingTicket == null && _tickets.isNotEmpty) {
+      for (final t in _tickets) {
+        final cat = t['category']?.toString().toLowerCase() ?? '';
+        if (cat.isNotEmpty && category.toLowerCase().contains(cat)) {
+          matchingTicket = Map<String, dynamic>.from(t as Map);
+          break;
+        }
+      }
+      matchingTicket ??= Map<String, dynamic>.from(_tickets.first as Map);
+    }
+
+    if (matchingTicket != null) {
+      if (ticketNumber.isEmpty && matchingTicket['id'] != null) {
+        ticketNumber = '#MT-${matchingTicket['id']}';
+      }
+      if (category.isEmpty && matchingTicket['category'] != null) {
+        category = matchingTicket['category'].toString();
+      }
+      if (description.isEmpty &&
+          (matchingTicket['description'] ?? matchingTicket['title']) != null) {
+        description =
+            (matchingTicket['description'] ?? matchingTicket['title']).toString();
+      }
+      final stage = (matchingTicket['stage'] as num?)?.toInt() ?? 0;
+      if (stage >= 4) {
+        isCompleted = true;
+        isApproved = false;
+      } else if (stage >= 2) {
+        isApproved = true;
+      }
+    }
+
+    if (category.isEmpty) category = 'Maintenance';
+    if (description.isEmpty) description = body;
+
+    matchingTicket ??= {
+      'id': parsedId ?? 0,
+      'category': category.split('•').first.trim(),
+      'title': category,
+      'description': description,
+      'stage': isCompleted ? 4 : (isApproved ? 2 : 0),
+      'priority': 'medium',
+      'created_at': DateTime.now().toIso8601String(),
+    };
 
     final catIcon = _getReportCategoryIcon(category);
 
@@ -1132,83 +1227,83 @@ class _MessagesScreenState extends State<MessagesScreen> {
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: Center(
         child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 420),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top Banner
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: headerBgColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(19),
-                    topRight: Radius.circular(19),
+              width: double.infinity,
+              constraints: const BoxConstraints(maxWidth: 420),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: badgeBg,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        headerIcon,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        headerTitle,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: primaryColor,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: badgeBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        statusPillText,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Banner
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: headerBgColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(19),
+                        topRight: Radius.circular(19),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            headerIcon,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            headerTitle,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: primaryColor,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            statusPillText,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
               // Card Body
               Padding(
@@ -1332,17 +1427,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           ],
                         ),
                         InkWell(
-                          onTap: () {
-                            if (widget.onNavigateTab != null) {
-                              widget.onNavigateTab!(1); // Go to Schedule tab
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Switched to Schedule Calendar!'),
-                                ),
-                              );
-                            }
-                          },
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => _openTicketDetail(matchingTicket!),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -1353,17 +1439,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
-                              children: const [
+                              children: [
                                 Text(
-                                  'View in Schedule',
-                                  style: TextStyle(
+                                  isCompleted ? 'View Ticket' : 'View Progress',
+                                  style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
                                   ),
                                 ),
-                                SizedBox(width: 4),
-                                Icon(
+                                const SizedBox(width: 4),
+                                const Icon(
                                   Icons.arrow_forward_rounded,
                                   size: 13,
                                   color: Colors.white,

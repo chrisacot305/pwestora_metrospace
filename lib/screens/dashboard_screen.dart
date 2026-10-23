@@ -12,6 +12,7 @@ import 'messages_screen.dart';
 import 'my_applications_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/luxury_rent_card.dart';
+import '../widgets/building_details_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Map<String, dynamic> lease;
@@ -492,7 +493,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const Spacer(),
 
-                    // Chat Button (Option 6: Minimalist Outlined Rounded Balloon on Floating Disc)
+                    // Receipts Button (Small icon beside Message button)
+                    Tooltip(
+                      message: 'Receipts',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReceiptsHistoryScreen(
+                                lease: _activeLease,
+                                rentAmount: rentAmount,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: isDark
+                                    ? Colors.black.withValues(alpha: 0.35)
+                                    : const Color(
+                                        0xFF0F172A,
+                                      ).withValues(alpha: 0.07),
+                                blurRadius: 12,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.receipt_long_rounded,
+                            size: 21,
+                            color: isDark
+                                ? const Color(0xFF60A5FA)
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Chat Button (Clean borderless floating circular button)
                     InkWell(
                       borderRadius: BorderRadius.circular(22),
                       onTap: () {
@@ -513,12 +564,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: isDark
                               ? const Color(0xFF1E293B)
                               : Colors.white,
-                          border: Border.all(
-                            color: isDark
-                                ? const Color(0xFF334155)
-                                : const Color(0xFFE2E8F0),
-                            width: 1.2,
-                          ),
                           boxShadow: [
                             BoxShadow(
                               color: isDark
@@ -706,6 +751,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     isGracePeriod: isGracePeriod,
                                     graceDaysRemaining: 5,
                                     overdueSubtext: overdueSubtext,
+                                    onCardTap: () {
+                                      final enriched = Map<String, dynamic>.from(leaseItem);
+                                      enriched['due_date'] = effectiveDueDate;
+                                      BuildingDetailsSheet.show(
+                                        context,
+                                        lease: enriched,
+                                        onNavigateTab: widget.onNavigateTab,
+                                      );
+                                    },
                                     onArrangementTap: () {
                                       Navigator.of(context)
                                           .push(
@@ -1016,25 +1070,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         },
                       ),
 
-                      // 2. Receipts with Official Receipt Icon
-                      _buildIslandActionItem(
-                        isDark: isDark,
-                        icon: Icons.receipt_long_rounded,
-                        label: 'Receipts',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ReceiptsHistoryScreen(
-                                lease: _activeLease,
-                                rentAmount: rentAmount,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                      // 3. Applications with Assignment Icon (My Applications for business expansion)
+                      // 2. Applications with Assignment Icon (My Applications for business expansion)
                       _buildIslandActionItem(
                         isDark: isDark,
                         icon: Icons.assignment_outlined,
@@ -1047,6 +1083,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     isTab: false,
                                     onLeaseMayHaveChanged: _refresh,
                                   ),
+                                ),
+                              )
+                              .then((_) => _refresh());
+                        },
+                      ),
+
+                      // 3. Violations with Warning Icon
+                      _buildIslandActionItem(
+                        isDark: isDark,
+                        icon: Icons.warning_amber_rounded,
+                        label: 'Violations',
+                        onTap: () {
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ViolationsScreen(lease: _activeLease),
                                 ),
                               )
                               .then((_) => _refresh());

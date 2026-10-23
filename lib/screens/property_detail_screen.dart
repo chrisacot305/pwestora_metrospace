@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import 'apply_screen.dart';
@@ -19,34 +22,114 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   void initState() {
     super.initState();
     _future = ApiService.fetchPropertyDetail(widget.propertyId);
-    _future.then((p) {
-      final photos = (p['photos'] as List<dynamic>? ?? []).cast<String>();
-      ApiService.addRecentlyViewed({
-        'id': p['id'],
-        'name': p['name'],
-        'type': p['type'],
-        'cover_photo': photos.isNotEmpty ? photos.first : null,
-      });
-    }).catchError((_) {
-      // Detail failed to load — handled by FutureBuilder
-    });
+    _future
+        .then((p) {
+          final photos = (p['photos'] as List<dynamic>? ?? []).cast<String>();
+          ApiService.addRecentlyViewed({
+            'id': p['id'],
+            'name': p['name'],
+            'type': p['type'],
+            'cover_photo': photos.isNotEmpty ? photos.first : null,
+          });
+        })
+        .catchError((_) {
+          // Detail failed to load — handled by FutureBuilder
+        });
+  }
+
+  LatLng _getPropertyLatLng(Map<String, dynamic> p) {
+    if (p['latitude'] != null && p['longitude'] != null) {
+      final lat = double.tryParse(p['latitude'].toString());
+      final lng = double.tryParse(p['longitude'].toString());
+      if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+        return LatLng(lat, lng);
+      }
+    }
+    return const LatLng(10.6765, 122.9510);
+  }
+
+  Future<void> _openGoogleMaps(Map<String, dynamic> p) async {
+    final latLng = _getPropertyLatLng(p);
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${latLng.latitude},${latLng.longitude}',
+    );
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (_) {}
+    }
+  }
+
+  String _formatLeaseTerm(dynamic term, dynamic months) {
+    if (term != null && term.toString().trim().isNotEmpty) {
+      final s = term.toString().trim();
+      if (s.toLowerCase().contains('month') ||
+          s.toLowerCase().contains('year')) {
+        return s;
+      }
+      final numVal = int.tryParse(s);
+      if (numVal != null) {
+        if (numVal <= 5) return '$numVal ${numVal == 1 ? "Year" : "Years"}';
+        return '$numVal Months';
+      }
+      return s;
+    }
+    if (months != null && months.toString().trim().isNotEmpty) {
+      return '$months Months';
+    }
+    return 'Flexible';
+  }
+
+  String _formatFloorArea(dynamic area) {
+    if (area != null && area.toString().trim().isNotEmpty) {
+      final s = area.toString().trim();
+      if (s.toLowerCase().contains('sqm') || s.toLowerCase().contains('m²')) {
+        return s;
+      }
+      return '$s sqm';
+    }
+    return 'Inquire for sqm';
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldBg = isDark ? const Color(0xFF000000) : AppColors.bg;
+    final cardColor = isDark ? const Color(0xFF121212) : AppColors.surface;
+    final borderColor = isDark ? const Color(0xFF262626) : AppColors.border;
+    final titleColor = isDark ? Colors.white : AppColors.ink900;
+    final subtextColor = isDark ? const Color(0xFF94A3B8) : AppColors.ink500;
+    final bodyTextColor = isDark ? const Color(0xFFCBD5E1) : AppColors.ink700;
+    final bottomBarBg = isDark ? const Color(0xFF121212) : Colors.white;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: scaffoldBg,
       body: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            return Scaffold(
+              backgroundColor: scaffoldBg,
+              body: const Center(
+                child: CircularProgressIndicator(color: AppColors.electricBlue),
+              ),
             );
           }
           if (snapshot.hasError) {
             return Scaffold(
-              appBar: AppBar(),
+              backgroundColor: scaffoldBg,
+              appBar: AppBar(
+                backgroundColor: cardColor,
+                leading: AppBackButton(isDark: isDark),
+              ),
               body: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -56,11 +139,21 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                       Container(
                         width: 64,
                         height: 64,
-                        decoration: AppDecorations.squircle(color: AppColors.errorSoft),
-                        child: const Icon(Icons.error_outline, color: AppColors.error, size: 32),
+                        decoration: AppDecorations.squircle(
+                          color: AppColors.errorSoft,
+                        ),
+                        child: const Icon(
+                          Icons.error_outline,
+                          color: AppColors.error,
+                          size: 32,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                      Text(
+                        snapshot.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: titleColor),
+                      ),
                     ],
                   ),
                 ),
@@ -71,18 +164,23 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
           final p = snapshot.data!;
           final photos = (p['photos'] as List<dynamic>? ?? []).cast<String>();
           final rawRent = p['asking_rent'] ?? p['rent'];
-          final double? askingRent = rawRent != null ? double.tryParse(rawRent.toString()) : null;
+          final double? askingRent = rawRent != null
+              ? double.tryParse(rawRent.toString())
+              : null;
+          final propertyLatLng = _getPropertyLatLng(p);
 
           return Stack(
             children: [
               CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // Full-bleed Image Gallery with Frosted Controls
+                  // Full-bleed Image Gallery with Controls
                   SliverAppBar(
                     pinned: true,
                     expandedHeight: 320,
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: isDark
+                        ? const Color(0xFF0F172A)
+                        : AppColors.primary,
                     foregroundColor: Colors.white,
                     leading: const AppBackButton(isDark: true),
                     flexibleSpace: FlexibleSpaceBar(
@@ -92,46 +190,60 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                               children: [
                                 PageView.builder(
                                   itemCount: photos.length,
-                                  onPageChanged: (i) => setState(() => _photoIndex = i),
+                                  onPageChanged: (i) =>
+                                      setState(() => _photoIndex = i),
                                   itemBuilder: (context, i) => Image.network(
                                     photos[i],
                                     fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => Container(color: AppColors.primaryLight),
+                                    errorBuilder: (c, e, s) => Container(
+                                      color: isDark
+                                          ? const Color(0xFF1E293B)
+                                          : AppColors.primaryLight,
+                                    ),
                                   ),
                                 ),
-                                // Gradient shade on top and bottom
                                 DecoratedBox(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
                                       colors: [
-                                        Colors.black.withValues(alpha: 0.4),
+                                        Colors.black.withValues(alpha: 0.45),
                                         Colors.transparent,
-                                        Colors.black.withValues(alpha: 0.6),
+                                        Colors.black.withValues(alpha: 0.65),
                                       ],
                                       stops: const [0.0, 0.5, 1.0],
                                     ),
                                   ),
                                 ),
-                                // Indicator dots
                                 if (photos.length > 1)
                                   Positioned(
                                     bottom: 16,
                                     left: 0,
                                     right: 0,
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: List.generate(photos.length, (i) {
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(photos.length, (
+                                        i,
+                                      ) {
                                         final active = i == _photoIndex;
                                         return AnimatedContainer(
-                                          duration: const Duration(milliseconds: 250),
+                                          duration: const Duration(
+                                            milliseconds: 250,
+                                          ),
                                           width: active ? 22 : 7,
                                           height: 7,
-                                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                                          margin: const EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: active ? Colors.white : Colors.white54,
-                                            borderRadius: BorderRadius.circular(999),
+                                            color: active
+                                                ? Colors.white
+                                                : Colors.white54,
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
                                           ),
                                         );
                                       }),
@@ -140,9 +252,15 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                               ],
                             )
                           : Container(
-                              color: AppColors.primaryLight,
+                              color: isDark
+                                  ? const Color(0xFF1E293B)
+                                  : AppColors.primaryLight,
                               child: const Center(
-                                child: Icon(Icons.apartment, size: 64, color: AppColors.tint),
+                                child: Icon(
+                                  Icons.apartment,
+                                  size: 64,
+                                  color: AppColors.tint,
+                                ),
                               ),
                             ),
                     ),
@@ -160,24 +278,50 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: AppDecorations.badge(bg: AppColors.accentSoft),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? const Color(0xFF1E293B)
+                                      : AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
                                 child: Text(
-                                  (p['type'] ?? 'COMMERCIAL').toString().toUpperCase(),
-                                  style: const TextStyle(
+                                  (p['type'] ?? 'COMMERCIAL')
+                                      .toString()
+                                      .toUpperCase(),
+                                  style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.primary,
+                                    color: isDark
+                                        ? const Color(0xFF60A5FA)
+                                        : AppColors.primary,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: AppDecorations.badge(bg: AppColors.successSoft),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? const Color(
+                                          0xFF064E3B,
+                                        ).withValues(alpha: 0.4)
+                                      : AppColors.successSoft,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
                                 child: const Row(
                                   children: [
-                                    Icon(Icons.verified, size: 14, color: AppColors.success),
+                                    Icon(
+                                      Icons.verified,
+                                      size: 14,
+                                      color: AppColors.success,
+                                    ),
                                     SizedBox(width: 4),
                                     Text(
                                       'Verified Space',
@@ -197,10 +341,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                           // Property Name
                           Text(
                             p['name'] ?? '',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
-                              color: AppColors.ink900,
+                              color: titleColor,
                               letterSpacing: -0.5,
                             ),
                           ),
@@ -212,15 +356,19 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                             children: [
                               const Padding(
                                 padding: EdgeInsets.only(top: 2),
-                                child: Icon(Icons.location_on, size: 16, color: AppColors.accent),
+                                child: Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: AppColors.electricBlue,
+                                ),
                               ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   p['address'] ?? '',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    color: AppColors.ink500,
+                                    color: subtextColor,
                                     height: 1.4,
                                   ),
                                 ),
@@ -229,20 +377,16 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                           ),
                           const SizedBox(height: 18),
 
-                          // Verified Trust & Protection Banner (Clean & Platform-Protected)
+                          // Verified Trust & Protection Banner
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
+                              color: cardColor,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.border.withValues(alpha: 0.9)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.03),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
+                              border: Border.all(color: borderColor),
                             ),
                             child: Row(
                               children: [
@@ -250,28 +394,39 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: AppColors.accentSoft,
+                                    color: isDark
+                                        ? const Color(0xFF1E293B)
+                                        : AppColors.accentSoft,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(Icons.verified_user_rounded, color: AppColors.electricBlue, size: 22),
+                                  child: const Icon(
+                                    Icons.verified_user_rounded,
+                                    color: AppColors.electricBlue,
+                                    size: 22,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
-                                const Expanded(
+                                Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Verified Commercial Space',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w800,
-                                          color: AppColors.ink900,
+                                          color: titleColor,
                                         ),
                                       ),
-                                      SizedBox(height: 2),
+                                      const SizedBox(height: 2),
                                       Text(
                                         'Legally binding digital contract & verified lessor accreditation',
-                                        style: TextStyle(fontSize: 11.5, color: AppColors.ink500, height: 1.3),
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: subtextColor,
+                                          height: 1.3,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -281,13 +436,13 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Space Features / Guarantee Grid
-                          const Text(
+                          // Dynamic Key Information
+                          Text(
                             'Key Information',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.ink900,
+                              color: titleColor,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -295,17 +450,22 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                             children: [
                               Expanded(
                                 child: _featureItem(
-                                  icon: Icons.shield_outlined,
-                                  title: 'Identity Verified',
-                                  subtitle: 'Direct Lessor',
+                                  icon: Icons.storefront_rounded,
+                                  title: (p['type'] ?? 'Commercial').toString(),
+                                  subtitle: 'Space Category',
+                                  isDark: isDark,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _featureItem(
-                                  icon: Icons.description_outlined,
-                                  title: 'Standard Terms',
-                                  subtitle: 'Clear Agreements',
+                                  icon: Icons.date_range_rounded,
+                                  title: _formatLeaseTerm(
+                                    p['lease_term'],
+                                    p['term_months'],
+                                  ),
+                                  subtitle: 'Standard Lease',
+                                  isDark: isDark,
                                 ),
                               ),
                             ],
@@ -315,20 +475,310 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                             children: [
                               Expanded(
                                 child: _featureItem(
-                                  icon: Icons.support_agent_outlined,
-                                  title: 'Maintenance',
-                                  subtitle: 'Direct Reporting',
+                                  icon: Icons.square_foot_rounded,
+                                  title: _formatFloorArea(p['floor_area']),
+                                  subtitle: 'Estimated Area',
+                                  isDark: isDark,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _featureItem(
-                                  icon: Icons.access_time_outlined,
-                                  title: 'Fast Review',
-                                  subtitle: '1-2 Days Typical',
+                                  icon: Icons.trending_up_rounded,
+                                  title: (p['escalation'] != null &&
+                                          p['escalation']
+                                              .toString()
+                                              .trim()
+                                              .isNotEmpty)
+                                      ? (p['escalation'].toString().contains('%')
+                                          ? '${p['escalation']} Annual'
+                                          : '${p['escalation']}% Annual')
+                                      : 'Standard / None',
+                                  subtitle: 'Escalation Rate',
+                                  isDark: isDark,
                                 ),
                               ),
                             ],
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Lessor Contact Details: First Gmail, then Phone Number underneath
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF1E293B)
+                                        : AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.business_rounded,
+                                    color: AppColors.electricBlue,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'PROPERTY CONTACT DETAILS',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: subtextColor,
+                                          letterSpacing: 0.6,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+
+                                      // 1. Gmail / Email (First)
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.mail_outline_rounded,
+                                            size: 15,
+                                            color: AppColors.electricBlue,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              (p['lessor_email'] != null &&
+                                                      p['lessor_email']
+                                                          .toString()
+                                                          .trim()
+                                                          .isNotEmpty)
+                                                  ? p['lessor_email'].toString()
+                                                  : 'Inquire via Pwestora',
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: bodyTextColor,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+
+                                      // 2. Phone Number (Underneath)
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.phone_outlined,
+                                            size: 15,
+                                            color: AppColors.electricBlue,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              (p['lessor_phone'] != null &&
+                                                      p['lessor_phone']
+                                                          .toString()
+                                                          .trim()
+                                                          .isNotEmpty)
+                                                  ? p['lessor_phone'].toString()
+                                                  : 'Contact available upon inquiry',
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: bodyTextColor,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          // Location (Clickable Facebook Marketplace Style)
+                          Text(
+                            'Location',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: titleColor,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: () => _openGoogleMaps(p),
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Clickable Map Area
+                                  ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(16),
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        SizedBox(
+                                          height: 190,
+                                          width: double.infinity,
+                                          child: IgnorePointer(
+                                            child: FlutterMap(
+                                              options: MapOptions(
+                                                initialCenter: propertyLatLng,
+                                                initialZoom: 15.0,
+                                                interactionOptions:
+                                                    const InteractionOptions(
+                                                      flags:
+                                                          InteractiveFlag.none,
+                                                    ),
+                                              ),
+                                              children: [
+                                                TileLayer(
+                                                  urlTemplate:
+                                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                                  userAgentPackageName:
+                                                      'com.pwestora.app',
+                                                ),
+                                                MarkerLayer(
+                                                  markers: [
+                                                    Marker(
+                                                      point: propertyLatLng,
+                                                      width: 40,
+                                                      height: 40,
+                                                      child: const Icon(
+                                                        Icons.location_on,
+                                                        size: 38,
+                                                        color: Color(
+                                                          0xFFEF4444,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        // Clickable Floating Badge (Facebook Marketplace Style)
+                                        Positioned(
+                                          bottom: 10,
+                                          right: 10,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xFF1E293B)
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? const Color(0xFF334155)
+                                                    : Colors.black12,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.18),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.open_in_new_rounded,
+                                                  size: 13,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : AppColors.ink900,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Open in Maps',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : AppColors.ink900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Address line below map
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.location_on_outlined,
+                                          size: 16,
+                                          color: AppColors.electricBlue,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            p['address'] ??
+                                                'Bacolod City, Philippines',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: bodyTextColor,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 12,
+                                          color: subtextColor,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -345,10 +795,13 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: bottomBarBg,
+                    border: Border(top: BorderSide(color: borderColor)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.4 : 0.08,
+                        ),
                         blurRadius: 20,
                         offset: const Offset(0, -4),
                       ),
@@ -363,12 +816,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
+                            Text(
                               'MONTHLY RENT',
                               style: TextStyle(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.ink500,
+                                color: subtextColor,
                                 letterSpacing: 0.4,
                               ),
                             ),
@@ -381,24 +834,27 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                                   TextSpan(
                                     text: (askingRent != null && askingRent > 0)
                                         ? '₱${_formatMoney(askingRent)}'
-                                        : '₱35,000',
-                                    style: const TextStyle(
+                                        : 'Inquire for Rent',
+                                    style: TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.w900,
-                                      color: AppColors.primary,
+                                      color: isDark
+                                          ? const Color(0xFF60A5FA)
+                                          : AppColors.primary,
                                       letterSpacing: -0.3,
                                       fontFamily: 'Roboto',
                                     ),
                                   ),
-                                  const TextSpan(
-                                    text: '/mo',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.ink500,
-                                      fontFamily: 'Roboto',
+                                  if (askingRent != null && askingRent > 0)
+                                    TextSpan(
+                                      text: '/mo',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: subtextColor,
+                                        fontFamily: 'Roboto',
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -422,16 +878,31 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                             );
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: isDark
+                                ? AppColors.electricBlue
+                                : AppColors.primary,
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('Apply for Space', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+                              Text(
+                                'Apply for Space',
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
                               SizedBox(width: 6),
-                              Icon(Icons.arrow_forward_rounded, size: 16),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
                             ],
                           ),
                         ),
@@ -451,17 +922,32 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     required IconData icon,
     required String title,
     required String subtitle,
+    bool isDark = false,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: AppDecorations.card(radius: 14, shadow: false),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF121212) : AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : AppColors.border,
+          width: 1,
+        ),
+      ),
       child: Row(
         children: [
           Container(
             width: 36,
             height: 36,
-            decoration: AppDecorations.squircle(color: AppColors.accentSoft),
-            child: Icon(icon, size: 18, color: AppColors.primary),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: isDark ? AppColors.electricBlue : AppColors.primary,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -472,13 +958,20 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink900),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.ink900,
+                  ),
                 ),
                 Text(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: AppColors.ink500),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? const Color(0xFF94A3B8) : AppColors.ink500,
+                  ),
                 ),
               ],
             ),

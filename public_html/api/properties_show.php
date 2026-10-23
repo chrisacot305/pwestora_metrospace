@@ -15,7 +15,8 @@ if ($id <= 0) {
 }
 
 $stmt = $pdo->prepare(
-    "SELECT p.id, p.name, p.type, p.address, p.latitude, p.longitude, p.asking_rent, u.company_name AS lessor_name
+    "SELECT p.*,
+            u.company_name AS lessor_name, u.email AS lessor_email, u.phone AS lessor_phone
      FROM properties p
      JOIN users u ON u.id = p.lessor_id
      WHERE p.id = ? AND p.status = 'verified'

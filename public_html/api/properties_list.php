@@ -11,14 +11,29 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_error('Use GET.', 405);
 }
 
-$rows = $pdo->query(
-    "SELECT p.id, p.name, p.type, p.address, p.latitude, p.longitude, p.asking_rent, u.company_name AS lessor_name,
-            (SELECT pp.photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo
-     FROM properties p
-     JOIN users u ON u.id = p.lessor_id
-     WHERE p.status = 'verified'
-     ORDER BY p.created_at DESC"
-)->fetchAll();
+try {
+    $rows = $pdo->query(
+        "SELECT p.id, p.name, p.type, p.address, p.latitude, p.longitude, p.asking_rent,
+                p.floor_area, p.lease_term, p.escalation, p.occupancy_status,
+                u.company_name AS lessor_name,
+                (SELECT pp.photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo
+         FROM properties p
+         JOIN users u ON u.id = p.lessor_id
+         WHERE p.status = 'verified'
+         ORDER BY p.created_at DESC"
+    )->fetchAll();
+} catch (Exception $e) {
+    // Resilient fallback query with base columns if extended columns are missing
+    $rows = $pdo->query(
+        "SELECT p.id, p.name, p.type, p.address, p.latitude, p.longitude, p.asking_rent,
+                u.company_name AS lessor_name,
+                (SELECT pp.photo_path FROM property_photos pp WHERE pp.property_id = p.id ORDER BY pp.id ASC LIMIT 1) AS cover_photo
+         FROM properties p
+         JOIN users u ON u.id = p.lessor_id
+         WHERE p.status = 'verified'
+         ORDER BY p.created_at DESC"
+    )->fetchAll();
+}
 
 // If logged in, work out which of these are already saved — optional, no error if not logged in.
 $savedIds = [];
@@ -34,7 +49,9 @@ if (preg_match('/Bearer\s+(\S+)/i', $header, $m)) {
 }
 
 foreach ($rows as &$r) {
-    $r['cover_photo'] = $r['cover_photo'] ? APP_URL . '/' . $r['cover_photo'] : null;
+    $r['building_name'] = $r['building_name'] ?? $r['name'];
+    $r['unit_number'] = $r['unit_number'] ?? null;
+    $r['cover_photo'] = !empty($r['cover_photo']) ? APP_URL . '/' . $r['cover_photo'] : null;
     $r['latitude'] = $r['latitude'] !== null ? (float) $r['latitude'] : null;
     $r['longitude'] = $r['longitude'] !== null ? (float) $r['longitude'] : null;
     $r['asking_rent'] = $r['asking_rent'] !== null ? (float) $r['asking_rent'] : null;
@@ -42,3 +59,4 @@ foreach ($rows as &$r) {
 }
 
 json_ok(['properties' => $rows]);
+

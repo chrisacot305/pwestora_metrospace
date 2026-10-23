@@ -83,6 +83,7 @@ class LuxuryRentCard extends StatelessWidget {
   final VoidCallback onPayRent;
   final Map<String, dynamic>? activeArrangement;
   final VoidCallback? onArrangementTap;
+  final VoidCallback? onCardTap;
   final bool isOverdue;
   final bool isGracePeriod;
   final int graceDaysRemaining;
@@ -97,6 +98,7 @@ class LuxuryRentCard extends StatelessWidget {
     required this.onPayRent,
     this.activeArrangement,
     this.onArrangementTap,
+    this.onCardTap,
     this.isOverdue = false,
     this.isGracePeriod = false,
     this.graceDaysRemaining = 5,
@@ -217,68 +219,84 @@ class LuxuryRentCard extends StatelessWidget {
                 notchWidth: notchWidth,
                 notchHeight: notchHeight,
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF0F2044),
-                      Color(0xFF09142B),
-                      Color(0xFF040A18),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF040A18).withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onCardTap,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF0F2044),
+                        Color(0xFF09142B),
+                        Color(0xFF040A18),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Row: Building / Property Name (and small, subtle Due Date when restructuring)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.domain_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                child: Text(
-                                  (propertyName != null && propertyName!.isNotEmpty)
-                                      ? propertyName!
-                                      : (tenantName.isNotEmpty ? tenantName : 'Commercial Space'),
-                                  style: const TextStyle(
-                                    fontSize: 18.5,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    letterSpacing: -0.4,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF040A18).withValues(alpha: 0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top Row: Building / Property Name (and small, subtle Due Date when restructuring)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  child: const Icon(
+                                    Icons.domain_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 9),
+                                Flexible(
+                                  child: Text(
+                                    (propertyName != null && propertyName!.isNotEmpty)
+                                        ? propertyName!
+                                        : (tenantName.isNotEmpty ? tenantName : 'Commercial Space'),
+                                    style: const TextStyle(
+                                      fontSize: 18.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                      letterSpacing: -0.4,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 9,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
                         // When in Restructuring Plan: small, subtle Due Date at top-right (no oval background, not full-looking)
                         if (hasRestructuring) ...[
@@ -553,6 +571,7 @@ class LuxuryRentCard extends StatelessWidget {
               ),
             ),
           ),
+        ),
 
           // ================= 3. INSET FLOATING '+ PAY RENT' BUTTON =================
           // Nestles right inside the bottom-right corner negative space

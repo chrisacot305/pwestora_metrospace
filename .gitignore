@@ -46,3 +46,9 @@ app.*.map.json
 
 # Large archives
 *.zip
+
+# Local backup folders
+public_html1/
+public_html (*)/
+
+

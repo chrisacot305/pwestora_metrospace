@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../widgets/scooped_nav_bar.dart';
+import '../widgets/loading.dart';
 import 'browse_screen.dart';
 import 'my_applications_screen.dart';
 import 'dashboard_screen.dart';
@@ -86,10 +87,14 @@ class _HomeShellState extends State<HomeShell> {
       future: _leaseFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: AppColors.bg,
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.electricBlue),
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Scaffold(
+            backgroundColor: isDark ? const Color(0xFF000000) : AppColors.bg,
+            body: const Center(
+              child: LogoLoadingIndicator(
+                size: 88,
+                strokeWidth: 3.8,
+              ),
             ),
           );
         }
